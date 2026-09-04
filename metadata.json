@@ -1,0 +1,6 @@
+{
+  "name": "OutLearn - AI Teacher",
+  "description": "An adaptive, human-like AI educator that teaches through synchronized video, voice, subject-aware interactive visuals, and deep misconception detection.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
