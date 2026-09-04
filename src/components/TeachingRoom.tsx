@@ -56,8 +56,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   const [showCaptions, setShowCaptions] = useState(true);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(lessonPlan.language);
-  const [teacherPersonality, setTeacherPersonality] = useState<TeacherPersonality>(lessonPlan.teacherPersonality);
+  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(lessonPlan?.language || 'en');
+  const [teacherPersonality, setTeacherPersonality] = useState<TeacherPersonality>(lessonPlan?.teacherPersonality || 'mentor');
 
   // Checkpoint Interaction State
   const [isAwaitingResponse, setIsAwaitingResponse] = useState(false);
@@ -78,11 +78,14 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   const [isAskModalOpen, setIsAskModalOpen] = useState(false);
   const [studentQuery, setStudentQuery] = useState('');
   const [teacherAnswer, setTeacherAnswer] = useState<string | null>(null);
+  const [teacherAnswerMeta, setTeacherAnswerMeta] = useState<{ isLiveAi: boolean; modelUsed?: string } | null>(null);
   const [isQueryLoading, setIsQueryLoading] = useState(false);
 
   // Decision State Machine Log (Inspectable for evaluators!)
   const [decisionLogs, setDecisionLogs] = useState<TeachingActionLogEntry[]>([]);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
+  const [isDeterminationsModalOpen, setIsDeterminationsModalOpen] = useState(false);
+  const [isLessonCompleted, setIsLessonCompleted] = useState(false);
 
   const currentStep = lessonPlan.steps[currentStepIdx] || lessonPlan.steps[0];
   const currentBeat: TeachingBeat =
@@ -119,6 +122,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
     let textToSpeak = beat.speechEn;
     if (activeLanguage === 'hi' && beat.speechHi) {
       textToSpeak = beat.speechHi;
+    } else if (activeLanguage === 'te' && beat.speechTe) {
+      textToSpeak = beat.speechTe;
     } else if (activeLanguage === 'hinglish' && beat.speechHinglish) {
       textToSpeak = beat.speechHinglish;
     }
@@ -191,6 +196,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
     } else {
       // Completed all steps!
       setIsPlaying(false);
+      setIsLessonCompleted(true);
       logTeachingAction('ASSESS', 'Lesson Final Assessment', 'All concept steps completed.');
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     }
@@ -237,7 +243,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         logTeachingAction(
           'MOVE_FORWARD',
           currentStep.concept.name,
-          'Checkpoint Passed. Concept mastery marked understood.'
+          `Checkpoint Passed. Concept mastery marked understood${data.modelUsed ? ` (Evaluated by ${data.modelUsed})` : ''}.`
         );
 
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
@@ -246,6 +252,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         speechService.speak(
           activeLanguage === 'hi'
             ? 'शाबाश! आपने सिद्धांत को बिल्कुल सही समझा। आइए आगे बढ़ते हैं।'
+            : activeLanguage === 'te'
+            ? 'అద్భుతం! మీరు సరైన సూత్రాన్ని అర్థం చేసుకున్నారు. ముందుకు వెళ్దాం.'
             : activeLanguage === 'hinglish'
             ? 'Perfect! Aapka logic bilkul accurate hai. Ab next step dekhte hain.'
             : 'Excellent work! You understood the core principle. Let us proceed.',
@@ -321,6 +329,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
       const data = await res.json();
       setTeacherAnswer(data.answer);
+      setTeacherAnswerMeta({ isLiveAi: Boolean(data.isLiveAi), modelUsed: data.modelUsed });
       setIsQueryLoading(false);
 
       speechService.speak(data.answer, activeLanguage, {
@@ -328,6 +337,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
       });
     } catch (err) {
       setTeacherAnswer(`In ${currentStep.concept.name}, this connects directly to the foundational law we just explored!`);
+      setTeacherAnswerMeta({ isLiveAi: false });
       setIsQueryLoading(false);
     }
   };
@@ -344,6 +354,10 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15">
                 Step {currentStepIdx + 1}/{lessonPlan.steps.length}
               </span>
+              <span className="hidden lg:inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono border border-emerald-300/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                <span>Backend Live</span>
+              </span>
               {lessonPlan.ragGrounded && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] font-mono hidden sm:inline-flex">
                   Grounded: {lessonPlan.sourceDocumentName || 'Curriculum'}
@@ -358,14 +372,14 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
         {/* Action Controls & Finish Assessment Button */}
         <div className="flex items-center gap-2">
-          {/* Decision State Machine Drawer Toggle (For Hackathon Judges!) */}
+          {/* Decision State Machine Drawer Toggle */}
           <button
             onClick={() => setIsLogDrawerOpen((v) => !v)}
             className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#E6E3DB] text-xs font-semibold flex items-center gap-1.5 transition-all"
-            title="Inspect AI Teacher State Decisions"
+            title="Inspect Session Analytics"
           >
             <ListOrdered className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Teacher Brain Log</span>
+            <span className="hidden md:inline">Session Log</span>
             <span className="w-4 h-4 rounded-full bg-[#1C1C1C] text-[#F9F8F6] text-[10px] flex items-center justify-center font-mono">
               {decisionLogs.length}
             </span>
@@ -374,7 +388,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           {/* Language Switcher dropdown */}
           <div className="relative">
             <select
-              value={activeLanguage}
+              value={activeLanguage || 'en'}
               onChange={(e) => setActiveLanguage(e.target.value as LanguageCode)}
               className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer"
             >
@@ -424,7 +438,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 Teacher Persona:
               </label>
               <select
-                value={teacherPersonality}
+                value={teacherPersonality || 'mentor'}
                 onChange={(e) => setTeacherPersonality(e.target.value as TeacherPersonality)}
                 className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
               >
@@ -519,6 +533,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <span>
                 {activeLanguage === 'hi' && currentBeat.speechHi
                   ? currentBeat.speechHi
+                  : activeLanguage === 'te' && currentBeat.speechTe
+                  ? currentBeat.speechTe
                   : activeLanguage === 'hinglish' && currentBeat.speechHinglish
                   ? currentBeat.speechHinglish
                   : currentBeat.speechEn}
@@ -595,7 +611,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               </button>
 
               <select
-                value={speechRate}
+                value={speechRate ?? 1.0}
                 onChange={(e) => setSpeechRate(Number(e.target.value))}
                 className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2 py-1 focus:outline-none font-sans"
               >
@@ -658,7 +674,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             ) : (
               <div className="mb-4">
                 <textarea
-                  value={freeTextAnswer}
+                  value={freeTextAnswer || ''}
                   onChange={(e) => setFreeTextAnswer(e.target.value)}
                   placeholder="Type your explanation or response here..."
                   className="w-full h-24 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl p-3 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
@@ -730,7 +746,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
-                value={studentQuery}
+                value={studentQuery || ''}
                 onChange={(e) => setStudentQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAskTeacher()}
                 placeholder="e.g., Why doesn't voltage change when resistance changes?"
@@ -748,7 +764,15 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             {/* Answer Display */}
             {teacherAnswer && (
               <div className="p-3.5 rounded-xl bg-[#F4F1EA] border border-[#1C1C1C]/15 text-xs text-[#1C1C1C] mb-3">
-                <div className="font-bold font-serif text-[#1C1C1C] text-[11px] mb-1">OutLearn's Explanation:</div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="font-bold font-serif text-[#1C1C1C] text-[11px]">OutLearn's Explanation:</div>
+                  {teacherAnswerMeta?.isLiveAi && (
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      <span>Live {teacherAnswerMeta.modelUsed || 'Gemini 3.1'}</span>
+                    </span>
+                  )}
+                </div>
                 <p className="leading-relaxed font-serif italic">{teacherAnswer}</p>
               </div>
             )}
@@ -812,6 +836,174 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 8 Pedagogical Determinations Blueprint Modal */}
+      {isDeterminationsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#1C1C1C]/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#1C1C1C]/20 max-w-2xl w-full rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-[#1C1C1C] text-[#F9F8F6]">
+                  <Sparkles className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
+                    8 Pedagogical Determinations
+                  </h3>
+                  <p className="text-[11px] text-[#666666] font-sans">
+                    OutLearn's pedagogical reasoning for {lessonPlan.topic}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDeterminationsModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[#F2EFEB] text-[#666666] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-3 pr-1 text-xs">
+              {lessonPlan.determinations ? (
+                <>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      1. What Needs to be Taught
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.whatNeedsToBeTaught}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-1">
+                      2. Which Concepts Should be Covered First
+                    </span>
+                    {Array.isArray(lessonPlan.determinations.conceptsCoveredFirst) ? (
+                      <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                        {lessonPlan.determinations.conceptsCoveredFirst.map((c, i) => (
+                          <span key={i} className="px-1.5 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10">
+                            {i + 1}. {c}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[#333333] font-serif leading-relaxed">
+                        {lessonPlan.determinations.conceptsCoveredFirst || lessonPlan.determinations.conceptsOrderReasoning}
+                      </p>
+                    )}
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      3. Depth of Explanation
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.depthOfExplanation || lessonPlan.determinations.depthCalibration}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      4. Examples or Visuals
+                    </span>
+                    {Array.isArray(lessonPlan.determinations.examplesAndVisuals) ? (
+                      <div className="space-y-0.5 font-sans text-[11px] text-[#444444]">
+                        {lessonPlan.determinations.examplesAndVisuals.map((ex, i) => (
+                          <div key={i}>• {ex}</div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[#333333] font-serif leading-relaxed">
+                        {lessonPlan.determinations.examplesAndVisuals}
+                      </p>
+                    )}
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      5. When Questioned
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.questioningTiming}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      6. Understanding Verification
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.understandingVerification || lessonPlan.determinations.understandingCriteria}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      7. Simplification or Expansion
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.simplificationOrExpansion || lessonPlan.determinations.adaptationTriggers}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
+                    <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
+                      8. What Should be Taught Next
+                    </span>
+                    <p className="text-[#333333] font-serif leading-relaxed">
+                      {lessonPlan.determinations.whatShouldBeTaughtNext || lessonPlan.determinations.nextStepsRecommendation}
+                    </p>
+                    {lessonPlan.determinations.testAtEnd && (
+                      <span className="mt-2 inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300/50">
+                        ✓ Summative test scheduled at end of session
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 text-center text-[#888888] font-sans">
+                  Standard curriculum progression active for this module.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-[#1C1C1C]/15 flex justify-end mt-2">
+              <button
+                onClick={() => setIsDeterminationsModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-[#1C1C1C] text-[#F9F8F6] text-xs font-semibold"
+              >
+                Close Blueprint
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lesson Complete Dialog */}
+      {isLessonCompleted && (
+        <div className="fixed inset-0 z-50 bg-[#1C1C1C]/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#1C1C1C]/20 max-w-lg w-full rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 border border-amber-300 mx-auto flex items-center justify-center mb-3">
+              <GraduationCap className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-serif font-bold text-[#1C1C1C] mb-1">
+              Teaching Session Complete!
+            </h3>
+            <p className="text-xs text-[#555555] font-serif leading-relaxed mb-4">
+              All concepts have been mastered according to your personalized instruction. As requested in your instruction (<span className="italic">"test me at the end"</span>), your comprehensive summative assessment is ready.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+              <button
+                onClick={() => onFinishLesson(lessonPlan, learnerProfile)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all font-sans"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Begin Summative Assessment Test</span>
+              </button>
+              <button
+                onClick={() => setIsLessonCompleted(false)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-medium font-sans"
+              >
+                Review Concepts
+              </button>
+            </div>
           </div>
         </div>
       )}

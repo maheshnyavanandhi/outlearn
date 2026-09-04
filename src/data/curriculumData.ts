@@ -89,6 +89,16 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
   teacherPersonality: 'mentor',
   sourceDocumentName: 'NCERT_Physics_Class_10_Chapter_4.pdf',
   ragGrounded: true,
+  determinations: {
+    whatNeedsToBeTaught: "Chapter 4: Electricity & Ohm's Law. Scoped to the 3 essential building blocks for a 20-minute beginner session: 1) Voltage as potential push, 2) Current as rate of charge flow, and 3) Resistance & Ohm's Law (V = I·R). Advanced AC calculus and internal resistance derivations are deferred.",
+    conceptsOrderReasoning: "Strict prerequisite dependency order: Electric Potential (Voltage) MUST be taught first because it is the cause of flow. Electric Current (I) is taught second as the physical effect. Resistance (R) and Ohm's Law are taught third as the interaction between cause and constraint.",
+    depthCalibration: "Calibrated for Beginner level in 20 minutes: High intuitive emphasis with tangible mechanical models (hydraulic pressure, pipe diameter), avoiding abstract differential field theory to ensure zero cognitive fatigue.",
+    examplesAndVisuals: "Everyday hydraulic pressure analogy (overhead water tank pushing water through a pipe with a valve) combined with an interactive real-time Circuit Simulation with live voltage/resistance sliders.",
+    questioningTiming: "Two formative checkpoints scheduled at pivotal concept boundaries: Checkpoint 1 after introducing Voltage/Current to verify flow mechanics; Checkpoint 2 after Ohm's law to diagnose potential direct/inverse proportionality inversion.",
+    understandingCriteria: "Evaluates whether the student understands physical causality (e.g. knowing that if resistance triples under fixed voltage, current drops by 3x) rather than mere formula memorization.",
+    adaptationTriggers: "If student exhibits direct/inverse inversion, immediately trigger SIMPLIFY with hydraulic visual analogy; if mastered, trigger MOVE_FORWARD and deepen with calculation practice.",
+    nextStepsRecommendation: "Summative 3-question mastery assessment at session completion, followed by progression to Chapter 5: Series and Parallel Resistive Circuits."
+  },
   prerequisitesOverview: [
     'Basic understanding of atoms and charged electrons',
     'Familiarity with proportional relationships (Direct vs Inverse)'
@@ -117,6 +127,7 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
           speechEn: 'Welcome! Today we will master Chapter 4: Electricity. Think of voltage as water pressure in an overhead tank.',
           speechHi: 'नमस्ते! आज हम कक्षा 10 का अध्याय 4 - विद्युत (Electricity) गहराई से समझेंगे। वोल्टेज को पानी की टंकी के प्रेशर की तरह समझें।',
           speechHinglish: 'Welcome! Aaj hum Chapter 4: Electricity ko crystal clear karenge. Voltage ko aap ek overhead water tank ke pressure ki tarah imagine kijiye.',
+          speechTe: 'స్వాగతం! ఈ రోజు మనం 4వ అధ్యాయం - విద్యుత్ (Electricity) సులభంగా నేర్చుకుందాం. వోల్టేజ్‌ను వాటర్ ట్యాంక్ పీడనం లాగా ఊహించుకోండి.',
           caption: 'Voltage is electrical push (pressure) measured in Volts (V).',
           visualCue: {
             subject: 'physics',
@@ -134,6 +145,7 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
           speechEn: 'When the battery provides 9 Volts, it creates a potential difference that urges free electrons to drift through the copper wire.',
           speechHi: 'जब बैटरी 9 वोल्ट देती है, तो यह तार में मुक्त इलेक्ट्रॉनों को आगे धकेलने के लिए एक बल पैदा करती है।',
           speechHinglish: 'Jab battery 9 Volts provide karti hai, toh yeh copper wire ke electrons ko push karne ke liye electrical potential difference banati hai.',
+          speechTe: 'బ్యాటరీ 9 వోల్ట్‌లను ఇచ్చినప్పుడు, అది రాగి తీగలో ఎలక్ట్రాన్‌లను నెట్టడానికి అవసరమైన పొటెన్షియల్ తేడాను కలుగజేస్తుంది.',
           caption: 'Potential difference drives electrons from negative to positive terminal.',
           visualCue: {
             subject: 'physics',
@@ -169,6 +181,7 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
           speechEn: 'Current, measured in Amperes, is simply the volume of electric charge passing through our circuit every second.',
           speechHi: 'विद्युत धारा (Current) एम्पीयर (A) में मापी जाती है। यह प्रति सेकंड बहने वाले आवेश की मात्रा है।',
           speechHinglish: 'Current jise hum I se likhte hain, Ampere (A) me calculate hota hai. Yeh basically per second pass hone wale charge ka flow rate hai.',
+          speechTe: 'విద్యుత్ ప్రవాహం (Current) ఆంపియర్లలో కొలుస్తారు. ఇది ప్రతి సెకనుకు తీగ గుండా ప్రవహించే చార్జ్ పరిమాణం.',
           caption: 'I = Q / t (Amperes = Coulombs per second)',
           visualCue: {
             subject: 'physics',
@@ -204,6 +217,7 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
           speechEn: 'Now comes the heart of Chapter 4: Ohm\'s Law. Voltage equals Current multiplied by Resistance: V equals I times R.',
           speechHi: 'अब आता है सबसे महत्वपूर्ण नियम: ओम का नियम (Ohm\'s Law)। V = I × R। धारा प्रतिरोध के व्युत्क्रमानुपाती होती है।',
           speechHinglish: 'Ab aate hain Chapter 4 ke main concept par: Ohm\'s Law! V = I * R. Iska matlab Current (I) = V / R hota hai.',
+          speechTe: 'ఇప్పుడు చాప్టర్ 4 లో అత్యంత ముఖ్యమైన ఓం నియమం: వోల్టేజ్ = విద్యుత్ ప్రవాహం × నిరోధం (V = I * R).',
           caption: 'Ohm\'s Law: V = I × R  →  I = V / R',
           visualCue: {
             subject: 'physics',
@@ -221,6 +235,7 @@ export const PHYSICS_OHMS_LAW_PLAN: LessonPlan = {
           speechEn: 'Here is a quick question to test your intuition: What happens to current if resistance increases while voltage remains constant?',
           speechHi: 'आपके लिए एक महत्वपूर्ण प्रश्न: यदि वोल्टेज स्थिर रहे और हम प्रतिरोध (Resistance) को बढ़ा दें, तो धारा (Current) पर क्या प्रभाव पड़ेगा?',
           speechHinglish: 'Ek quick conceptual check: Agar voltage constant rahe aur resistance increase ho jaye, toh current ko kya hoga?',
+          speechTe: 'మీ అవగాహనను పరీక్షించడానికి ఒక ప్రశ్న: వోల్టేజ్ స్థిరంగా ఉన్నప్పుడు నిరోధం (Resistance) పెరిగితే, విద్యుత్ ప్రవాహానికి ఏమవుతుంది?',
           caption: 'Checkpoint: If R increases while V stays constant, what happens to Current (I)?',
           pauseForInteraction: true,
           checkpoint: {

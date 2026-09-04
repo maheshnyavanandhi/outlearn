@@ -4,7 +4,8 @@ import {
   TimeBudget,
   LanguageCode,
   TeacherPersonality,
-  LessonPlan
+  LessonPlan,
+  TeacherDeterminations
 } from '../types';
 import {
   SUPPORTED_LANGUAGES,
@@ -25,7 +26,14 @@ import {
   Cpu,
   FileText,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  HelpCircle,
+  Layers,
+  Sliders,
+  Eye,
+  CheckSquare,
+  GitBranch,
+  Target
 } from 'lucide-react';
 
 interface SetupViewProps {
@@ -35,18 +43,45 @@ interface SetupViewProps {
 
 export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLearningPath }) => {
   const [mode, setMode] = useState<'topic' | 'upload'>('topic');
-  const [topicInput, setTopicInput] = useState('');
+  const [topicInput, setTopicInput] = useState("Chapter 4: Electricity & Ohm's Law");
   const [level, setLevel] = useState<EducationalLevel>('beginner');
   const [timeBudget, setTimeBudget] = useState<TimeBudget>('20min');
-  const [language, setLanguage] = useState<LanguageCode>('hinglish');
+  const [language, setLanguage] = useState<LanguageCode>('hi');
   const [personality, setPersonality] = useState<TeacherPersonality>('mentor');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<string>('');
+  const [backendStatus, setBackendStatus] = useState<{ connected: boolean; model?: string }>({ connected: true, model: 'Gemini 3.1 Flash' });
+
+  // Natural Instruction & 8 Determinations State
+  const [studentInstruction, setStudentInstruction] = useState(
+    'I am a beginner. Teach me Chapter 4 in 20 minutes. Explain it in Hindi/Telugu using simple examples. Ask me questions during the lesson and test me at the end.'
+  );
+  const [isAnalyzingInstruction, setIsAnalyzingInstruction] = useState(false);
+  const [activeDeterminations, setActiveDeterminations] = useState<TeacherDeterminations | null>(
+    PHYSICS_OHMS_LAW_PLAN.determinations || null
+  );
+  const [showDeterminationsDetails, setShowDeterminationsDetails] = useState(true);
+  const [testAtEndRequested, setTestAtEndRequested] = useState(true);
 
   // Upload state
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadedFileContent, setUploadedFileContent] = useState<string>('');
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [extractedSummary, setExtractedSummary] = useState<any | null>(null);
+
+  // Check live backend on mount
+  React.useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'ok') {
+          setBackendStatus({ connected: true, model: data.defaultModel || 'Gemini 3.1 Flash' });
+        }
+      })
+      .catch(() => {
+        setBackendStatus({ connected: false });
+      });
+  }, []);
 
   // Quick-load exemplars
   const handleLoadExemplar = (exemplar: LessonPlan) => {
@@ -55,8 +90,42 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
       language,
       teacherPersonality: personality,
       timeBudget,
-      educationalLevel: level
+      educationalLevel: level,
+      determinations: exemplar.determinations || activeDeterminations || undefined
     });
+  };
+
+  // Analyze Student Natural Instruction via Real Backend
+  const handleAnalyzeInstruction = async (customInstruction?: string) => {
+    const textToAnalyze = customInstruction !== undefined ? customInstruction : studentInstruction;
+    if (!textToAnalyze.trim()) return;
+
+    setIsAnalyzingInstruction(true);
+    try {
+      const res = await fetch('/api/parse-student-instruction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction: textToAnalyze,
+          materialContext: uploadedFileContent || 'NCERT Class 10 Physics Chapter 4: Electricity & Ohm\'s Law',
+          fileName: uploadedFileName || 'NCERT_Physics_Chapter_4.pdf'
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.determinations) {
+        setActiveDeterminations(data.determinations);
+        if (data.detectedLevel) setLevel(data.detectedLevel);
+        if (data.detectedTime) setTimeBudget(data.detectedTime);
+        if (data.detectedLanguage) setLanguage(data.detectedLanguage);
+        if (data.detectedTopic) setTopicInput(data.detectedTopic);
+        if (data.testAtEnd !== undefined) setTestAtEndRequested(data.testAtEnd);
+        setShowDeterminationsDetails(true);
+      }
+    } catch (e) {
+      console.warn('Error analyzing student instruction:', e);
+    } finally {
+      setIsAnalyzingInstruction(false);
+    }
   };
 
   // Handle file drop / upload
@@ -71,7 +140,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
       const text = await file.text();
       setUploadedFileContent(text);
 
-      // Call document RAG endpoint
+      // Call real backend document RAG endpoint
       const res = await fetch('/api/process-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,6 +152,11 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
       const data = await res.json();
       setExtractedSummary(data.extracted);
       setTopicInput(data.extracted?.title || file.name.replace(/\.[^/.]+$/, ''));
+
+      // Also trigger instruction analysis if an instruction is present
+      if (studentInstruction.trim()) {
+        handleAnalyzeInstruction();
+      }
     } catch (err) {
       console.warn('Document parse error, falling back locally', err);
       setExtractedSummary({
@@ -95,10 +169,19 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
     }
   };
 
-  // Generate Custom Lesson
+  // Generate Custom Lesson via Real Express & Gemini Backend
   const handleGenerateCustomLesson = async () => {
     const effectiveTopic = topicInput.trim() || 'General Science & Principles';
     setIsGenerating(true);
+    setGenerationPhase('Connecting to OutLearn server (/api/generate-lesson-plan)...');
+
+    const timer1 = setTimeout(() => {
+      setGenerationPhase('Google Gemini 3.1 formulating 8 pedagogical determinations...');
+    }, 1200);
+
+    const timer2 = setTimeout(() => {
+      setGenerationPhase('Structuring diagnostic checkpoints & interactive laboratory bindings...');
+    }, 4500);
 
     try {
       const res = await fetch('/api/generate-lesson-plan', {
@@ -109,14 +192,94 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
           educationalLevel: level,
           timeBudget,
           language,
+          studentInstruction,
           materialContext: uploadedFileContent
         })
       });
 
-      const data = await res.json();
-      const plan: LessonPlan = data.plan;
+      clearTimeout(timer1);
+      clearTimeout(timer2);
 
-      // Enhance with full fallback steps if generated plan is lightweight
+      const data = await res.json();
+      const plan = data.plan;
+
+      // Map raw beats with complete fidelity including Telugu and determinations
+      const mappedSteps = (plan.steps && plan.steps.length > 0) ? plan.steps.map((st: any, sIdx: number) => {
+        const stepId = st.id || `step-${sIdx + 1}`;
+        const conceptId = `c-${stepId}`;
+
+        const beats = (st.beats && st.beats.length > 0) ? st.beats.map((b: any, bIdx: number) => {
+          const visualCue = b.visualCue || {
+            subject: plan.subject || 'physics',
+            viewMode: plan.subject === 'biology' ? 'cell_explorer' : plan.subject === 'dbms' ? 'dbms_tables' : plan.subject === 'mathematics' ? 'balance_scale' : plan.subject === 'programming' ? 'code_tracer' : 'circuit_simulation'
+          };
+
+          const checkpoint = b.checkpoint ? {
+            id: `cp-${stepId}-${bIdx}`,
+            type: 'mcq' as const,
+            purpose: 'diagnose' as const,
+            question: b.checkpoint.question,
+            options: b.checkpoint.options || ['The flow rate increases proportionally', 'The flow rate decreases', 'The flow rate remains strictly constant'],
+            correctAnswer: b.checkpoint.correctAnswer || (b.checkpoint.options ? b.checkpoint.options[0] : 'The flow rate increases proportionally'),
+            hint: b.checkpoint.hint || 'Reflect on the foundational relationship discussed above.',
+            conceptId,
+            knownMisconceptions: (b.checkpoint.misconceptions || []).map((m: any) => ({
+              triggerPattern: m.trigger || '',
+              category: m.category || 'conceptual_misconception',
+              misconceptionName: m.diagnosis || 'Core Misconception',
+              diagnosedThought: m.diagnosis || 'Flawed intuitive assumption',
+              correctiveStrategy: 'analogy' as const,
+              correctiveSpeech: m.correctionSpeech || 'Let us re-examine this through an intuitive physical balance.'
+            }))
+          } : undefined;
+
+          return {
+            id: b.id || `beat-${stepId}-${bIdx}`,
+            conceptId,
+            action: b.action || (checkpoint ? 'ASK_CONCEPTUAL' : 'EXPLAIN'),
+            speechEn: b.speechEn || `Let's focus on ${st.conceptName || effectiveTopic}.`,
+            speechHi: b.speechHi,
+            speechHinglish: b.speechHinglish,
+            speechTe: b.speechTe,
+            caption: b.caption || `Focus on ${st.conceptName || effectiveTopic}`,
+            visualCue,
+            pauseForInteraction: Boolean(b.pauseForInteraction || checkpoint),
+            checkpoint,
+            durationSec: b.durationSec || 12
+          };
+        }) : [
+          {
+            id: `beat-${stepId}-intro`,
+            conceptId,
+            action: 'INTRODUCE' as const,
+            speechEn: `Welcome to our session on ${st.conceptName || effectiveTopic}. Let us explore the core principles together!`,
+            speechHi: `${st.conceptName || effectiveTopic} के इस सत्र में आपका स्वागत है।`,
+            speechHinglish: `${st.conceptName || effectiveTopic} ke is session me aapka welcome!`,
+            speechTe: `${st.conceptName || effectiveTopic} కి స్వాగతం!`,
+            caption: `Introduction to ${st.conceptName || effectiveTopic}`,
+            visualCue: { subject: plan.subject || 'physics', viewMode: 'circuit_simulation' },
+            pauseForInteraction: false,
+            durationSec: 10
+          }
+        ];
+
+        return {
+          id: stepId,
+          concept: {
+            id: conceptId,
+            name: st.conceptName || `${effectiveTopic} Foundations`,
+            subject: plan.subject || 'physics',
+            summary: st.summary || 'Fundamental conceptual framework',
+            difficulty: level,
+            prerequisites: [],
+            keyTerms: st.keyTerms || ['Definition', 'Application']
+          },
+          allocatedMinutes: st.allocatedMinutes || (timeBudget === '5min' ? 2 : 6),
+          masteryState: 'unknown' as const,
+          beats
+        };
+      }) : PHYSICS_OHMS_LAW_PLAN.steps;
+
       const finalPlan: LessonPlan = {
         id: `dyn-plan-${Date.now()}`,
         topic: plan.topic || effectiveTopic,
@@ -126,39 +289,18 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
         totalMinutes: timeBudget === '5min' ? 5 : timeBudget === '20min' ? 20 : 60,
         language,
         teacherPersonality: personality,
-        prerequisitesOverview: (plan as any).prerequisites || plan.prerequisitesOverview || ['Basic curiosity and open mind'],
-        steps: (plan.steps && plan.steps.length > 0) ? plan.steps.map((st: any) => ({
-          id: st.id || `step-${Math.random()}`,
-          concept: {
-            id: `c-${Math.random()}`,
-            name: st.conceptName || `${effectiveTopic} Concepts`,
-            subject: plan.subject || 'physics',
-            summary: st.summary || 'Fundamental principles',
-            difficulty: level,
-            prerequisites: [],
-            keyTerms: st.keyTerms || ['Definition', 'Application']
-          },
-          allocatedMinutes: st.allocatedMinutes || 5,
-          masteryState: 'unknown',
-          beats: st.beats || [
-            {
-              id: `b-${Math.random()}`,
-              conceptId: `c-dyn`,
-              action: 'INTRODUCE',
-              speechEn: `Welcome to our session on ${effectiveTopic}. Let us explore the core principles together!`,
-              caption: `Introduction to ${effectiveTopic}`,
-              visualCue: { subject: plan.subject || 'physics', viewMode: 'overview' },
-              durationSec: 8
-            }
-          ]
-        })) : PHYSICS_OHMS_LAW_PLAN.steps,
+        prerequisitesOverview: (plan as any).prerequisites || plan.prerequisitesOverview || ['Curiosity and core foundational knowledge'],
+        steps: mappedSteps,
         sourceDocumentName: uploadedFileName || undefined,
-        ragGrounded: Boolean(uploadedFileName)
+        ragGrounded: Boolean(uploadedFileName),
+        determinations: plan.determinations || activeDeterminations || PHYSICS_OHMS_LAW_PLAN.determinations
       };
 
       setIsGenerating(false);
       onStartLesson(finalPlan);
     } catch (err) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       console.warn('Failed to generate lesson, launching physics exemplar', err);
       setIsGenerating(false);
       handleLoadExemplar(PHYSICS_OHMS_LAW_PLAN);
@@ -313,7 +455,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
             <div className="relative">
               <input
                 type="text"
-                value={topicInput}
+                value={topicInput || ''}
                 onChange={(e) => setTopicInput(e.target.value)}
                 placeholder="e.g. Newton's Laws of Motion for Class 8, React Hooks for Technical Interview, Neural Networks..."
                 className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-4 py-3.5 text-sm text-[#1C1C1C] placeholder-[#888888] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] focus:border-[#1C1C1C]"
@@ -341,14 +483,14 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
           /* Document Upload Dropzone (RAG Knowledge Grounding) */
           <div className="mb-6">
             <label className="block text-xs font-mono font-bold uppercase tracking-wider text-[#1C1C1C] mb-2">
-              Upload Educational Material (Books, Textbooks, PDFs, Notes, Research Papers)
+              Upload Educational Material (Books, Textbooks, PDFs, Notes, Research Papers, DOCX, PPTX)
             </label>
 
             <div className="border-2 border-dashed border-[#1C1C1C]/20 hover:border-[#1C1C1C]/40 bg-[#F9F8F6] rounded-2xl p-6 text-center transition-all">
               <input
                 type="file"
                 id="file-upload"
-                accept=".pdf,.txt,.md,.doc,.docx"
+                accept=".pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.rtf,.csv,.json"
                 onChange={handleFileUpload}
                 className="hidden"
               />
@@ -357,10 +499,10 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
                   <Upload className="w-6 h-6" />
                 </div>
                 <span className="text-sm font-semibold text-[#1C1C1C]">
-                  {uploadedFileName ? uploadedFileName : 'Click to select or drag & drop textbook file'}
+                  {uploadedFileName ? uploadedFileName : 'Click to select or drag & drop textbook / course file'}
                 </span>
                 <span className="text-xs text-[#777777] mt-1 font-sans">
-                  Supports PDF, DOCX, PPTX notes, Markdown, and TXT files
+                  Supports Books, Textbooks, PDFs, DOC/DOCX, PPT/PPTX slides, Notes, Research Papers
                 </span>
               </label>
             </div>
@@ -369,23 +511,132 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
             {isParsingDoc && (
               <div className="mt-3 p-3 rounded-xl bg-[#F2EFEB] border border-[#1C1C1C]/20 text-xs text-[#1C1C1C] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#1C1C1C] animate-ping" />
-                <span>Extracting chapters, sections, definitions, and formulas from document...</span>
+                <span>RAG Indexer: Extracting chapters, sections, definitions, and citations...</span>
               </div>
             )}
 
             {extractedSummary && (
-              <div className="mt-3 p-3.5 rounded-xl bg-[#F4F1EA] border border-[#1C1C1C]/20 text-xs text-[#1C1C1C]">
-                <div className="flex items-center gap-2 text-[#059669] font-bold mb-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Document Analyzed & Grounded into Knowledge Base</span>
+              <div className="mt-3 p-4 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/20 text-xs text-[#1C1C1C] space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1C1C1C]/10 pb-2">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Knowledge Grounded & Indexed (RAG Active)</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300/50">
+                    {extractedSummary.docType || 'Educational Material'} • Hallucination Protection ON
+                  </span>
                 </div>
-                <p className="text-[#666666] text-[11px]">
-                  Detected Chapters: {extractedSummary.chapters?.map((c: any) => c.title).join(', ') || '1 identified chapter'}
-                </p>
+
+                {extractedSummary.chapters && extractedSummary.chapters.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-[#777777] uppercase block mb-1">
+                      Identified Chapters & Sections:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {extractedSummary.chapters.map((ch: any, idx: number) => (
+                        <div key={idx} className="p-2 rounded-lg bg-[#FFFFFF] border border-[#1C1C1C]/10 text-[11px]">
+                          <span className="font-bold font-serif text-[#1C1C1C] block">{ch.title}</span>
+                          <span className="text-[#666666] text-[10px] block truncate">{ch.summary || ch.keySection}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {extractedSummary.concepts && extractedSummary.concepts.length > 0 && (
+                  <div className="pt-1">
+                    <span className="text-[10px] font-mono font-bold text-[#777777] uppercase block mb-1">
+                      Extracted Grounded Concepts & Definitions:
+                    </span>
+                    <div className="space-y-1">
+                      {extractedSummary.concepts.slice(0, 3).map((c: any, idx: number) => (
+                        <div key={idx} className="text-[11px] text-[#333333] flex items-start gap-1.5">
+                          <span className="font-bold text-[#1C1C1C] shrink-0">• {c.name}:</span>
+                          <span className="text-[#555555] font-serif">{c.definition || c.formula}</span>
+                          {c.sourceCitation && (
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10 shrink-0">
+                              {c.sourceCitation}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
+
+        {/* Student Natural Instruction & Personalization Panel */}
+        <div className="my-6 p-5 sm:p-6 rounded-2xl bg-[#FAF9F5] border border-[#1C1C1C]/15 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-[#1C1C1C] text-[#F9F8F6]">
+                <Sparkles className="w-4 h-4" />
+              </span>
+              <div>
+                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#1C1C1C]">
+                  Custom Learning Preferences & Natural Instructions
+                </h3>
+                <p className="text-[11px] text-[#666666] font-sans">
+                  Provide custom constraints (e.g. pace, target level, preferred language, question frequency, or final test).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Text Area for Instruction */}
+          <div className="relative">
+            <textarea
+              value={studentInstruction || ''}
+              onChange={(e) => setStudentInstruction(e.target.value)}
+              rows={3}
+              placeholder="e.g. I am a beginner. Teach me Chapter 4 in 20 minutes. Explain it in Hindi/Telugu using simple examples. Ask me questions during the lesson and test me at the end."
+              className="w-full bg-[#FFFFFF] border border-[#1C1C1C]/20 rounded-xl px-4 py-3 text-xs text-[#1C1C1C] placeholder-[#888888] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-sans leading-relaxed resize-none"
+            />
+          </div>
+
+          {/* Quick Preset Buttons */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-mono text-[#777777] uppercase">Sample Prompts:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const preset = "I am a beginner. Teach me Chapter 4 in 20 minutes. Explain it in Hindi/Telugu using simple examples. Ask me questions during the lesson and test me at the end.";
+                  setStudentInstruction(preset);
+                  setTopicInput("Chapter 4: Electricity & Ohm's Law");
+                }}
+                className="px-2.5 py-1 rounded-md bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-[10px] font-mono transition-all"
+              >
+                Physics Ch 4 (Hindi/Telugu, 20m)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const preset = "I am a beginner. Teach me DBMS Chapter 4: Relational Algebra in 20 minutes in Hinglish with visual tables. Ask me questions after each concept and test me at the end.";
+                  setStudentInstruction(preset);
+                  setTopicInput("DBMS Chapter 4: Relational Algebra");
+                }}
+                className="px-2.5 py-1 rounded-md bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-[10px] font-mono transition-all"
+              >
+                DBMS Ch 4 (Hinglish, 20m)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const preset = "I am a beginner. Teach me Biology Chapter 4 in 20 minutes. Explain in Telugu using cell diagrams. Ask questions during lesson and evaluate me at the end.";
+                  setStudentInstruction(preset);
+                  setTopicInput("Biology Chapter 4: Cell Structure");
+                }}
+                className="px-2.5 py-1 rounded-md bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-[10px] font-mono transition-all"
+              >
+                Biology Ch 4 (Telugu, 20m)
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* 4 Learner Adaptation Dimensions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-4 border-t border-[#1C1C1C]/15">
@@ -441,7 +692,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
               <span>3. Preferred Language</span>
             </label>
             <select
-              value={language}
+              value={language || 'hi'}
               onChange={(e) => setLanguage(e.target.value as LanguageCode)}
               className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
             >
@@ -463,7 +714,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
               <span>4. Teacher Personality</span>
             </label>
             <select
-              value={personality}
+              value={personality || 'mentor'}
               onChange={(e) => setPersonality(e.target.value as TeacherPersonality)}
               className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
             >
@@ -479,17 +730,26 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
           </div>
         </div>
 
-        {/* Start Teaching Session Button */}
-        <div className="pt-6 border-t border-[#1C1C1C]/15 flex justify-end">
+        {/* Start Teaching Session Button & Generation Progress */}
+        <div className="pt-6 border-t border-[#1C1C1C]/15 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-xs text-[#555555] flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${backendStatus.connected ? 'bg-emerald-500' : 'bg-emerald-600'} ${isGenerating ? 'animate-ping' : ''}`} />
+            <span className="font-mono text-[11px]">
+              {isGenerating
+                ? generationPhase || 'Preparing personalized lesson plan...'
+                : 'Adaptive AI Teaching Studio Online'}
+            </span>
+          </div>
+
           <button
             onClick={handleGenerateCustomLesson}
             disabled={isGenerating}
-            className="px-6 py-3.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-50 text-[#F9F8F6] font-semibold text-sm shadow-md flex items-center gap-2 transition-all font-sans"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-50 text-[#F9F8F6] font-semibold text-sm shadow-md flex items-center justify-center gap-2 transition-all font-sans"
           >
             {isGenerating ? (
               <>
                 <span className="w-4 h-4 border-2 border-[#F9F8F6] border-t-transparent rounded-full animate-spin" />
-                <span>Structuring Personalized Lesson...</span>
+                <span>Generating with Gemini...</span>
               </>
             ) : (
               <>

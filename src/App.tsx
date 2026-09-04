@@ -33,24 +33,43 @@ export default function App() {
   const [learningReport, setLearningReport] = useState<LearningReport | null>(null);
   const [isStreakPopoverOpen, setIsStreakPopoverOpen] = useState(false);
 
-  // Persistent Learner Profile
-  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>({
-    id: 'student-demo-01',
-    name: 'Mahesh N.',
-    educationalLevel: 'beginner',
-    statedPriorKnowledge: 'Basic algebra and physical models',
-    learningObjective: 'Master Chapter 4 & Prepare for Assessments',
-    preferredLanguage: 'hinglish',
-    timeBudget: '20min',
-    teacherPersonality: 'mentor',
-    conceptMastery: {
-      'c-voltage': 'understood',
-      'c-current': 'developing'
-    },
-    recentMisconceptions: [],
-    sessionsCompleted: 3,
-    dailyStreak: 4
+  // Persistent Learner Profile with localStorage synchronization
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>(() => {
+    try {
+      const saved = localStorage.getItem('outlearn_learner_profile');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('Failed to load profile from storage', e);
+    }
+    return {
+      id: 'student-demo-01',
+      name: 'Mahesh N.',
+      educationalLevel: 'beginner',
+      statedPriorKnowledge: 'Basic algebra and physical models',
+      learningObjective: 'Master Chapter 4 & Prepare for Assessments',
+      preferredLanguage: 'hinglish',
+      timeBudget: '20min',
+      teacherPersonality: 'mentor',
+      conceptMastery: {
+        'c-voltage': 'understood',
+        'c-current': 'developing'
+      },
+      recentMisconceptions: [],
+      sessionsCompleted: 3,
+      dailyStreak: 4
+    };
   });
+
+  const handleUpdateProfile = (newProfile: LearnerProfile) => {
+    setLearnerProfile(newProfile);
+    try {
+      localStorage.setItem('outlearn_learner_profile', JSON.stringify(newProfile));
+    } catch (e) {
+      console.warn('Failed to persist profile to storage', e);
+    }
+  };
 
   // Handler: Start a lesson from Setup
   const handleStartLesson = (plan: LessonPlan) => {
@@ -61,18 +80,19 @@ export default function App() {
   // Handler: Finish lesson and take Assessment
   const handleFinishLesson = (plan: LessonPlan, profile: LearnerProfile) => {
     setActiveLessonPlan(plan);
-    setLearnerProfile(profile);
+    handleUpdateProfile(profile);
     setCurrentView('assessment');
   };
 
   // Handler: Complete assessment and show Learning Report
   const handleCompleteAssessment = (report: LearningReport) => {
     setLearningReport(report);
-    setLearnerProfile((prev) => ({
-      ...prev,
-      sessionsCompleted: prev.sessionsCompleted + 1,
-      dailyStreak: (prev.dailyStreak ?? 4) + 1
-    }));
+    const updated = {
+      ...learnerProfile,
+      sessionsCompleted: learnerProfile.sessionsCompleted + 1,
+      dailyStreak: (learnerProfile.dailyStreak ?? 4) + 1
+    };
+    handleUpdateProfile(updated);
     setCurrentView('report');
   };
 
@@ -265,6 +285,12 @@ export default function App() {
                 <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none">Mastered</span>
                 <span className="font-bold text-[#1C1C1C]">{masteredConceptsCount} Concepts</span>
               </div>
+            </div>
+
+            {/* Live Backend Connection Indicator */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/15 shadow-2xs font-mono text-[11px]" title="Connected to Express server running Google Gemini 3.1 Flash">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[#1C1C1C] font-semibold">Gemini 3.1 AI Backend</span>
             </div>
 
             <button

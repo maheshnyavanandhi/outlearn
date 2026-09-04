@@ -94,6 +94,7 @@ export interface TeachingBeat {
   speechEn: string;
   speechHi?: string;
   speechHinglish?: string;
+  speechTe?: string;
   caption: string;
   visualCue: {
     subject: SubjectType;
@@ -127,6 +128,24 @@ export interface LessonStep {
   masteryState: ConceptMasteryState;
 }
 
+export interface TeacherDeterminations {
+  whatNeedsToBeTaught: string;                           // 1. What needs to be taught
+  conceptsOrderReasoning?: string;                       // 2. Which concepts should be covered first
+  conceptsCoveredFirst?: string[] | string;
+  depthCalibration?: string;                             // 3. How deeply each concept should be explained
+  depthOfExplanation?: string;
+  examplesAndVisuals: string[] | string;                 // 4. Which examples or visuals should be used
+  questioningTiming: string;                            // 5. When the student should be questioned
+  understandingCriteria?: string;                        // 6. Whether the student has understood the concept
+  understandingVerification?: string;
+  adaptationTriggers?: string;                           // 7. Whether the lesson needs to be simplified or expanded
+  simplificationOrExpansion?: string;
+  nextStepsRecommendation?: string;                      // 8. What should be taught next
+  whatShouldBeTaughtNext?: string;
+  rawStudentInstruction?: string;
+  testAtEnd?: boolean;
+}
+
 export interface LessonPlan {
   id: string;
   topic: string;
@@ -140,6 +159,7 @@ export interface LessonPlan {
   steps: LessonStep[];
   sourceDocumentName?: string;
   ragGrounded: boolean;
+  determinations?: TeacherDeterminations;
 }
 
 export interface LearnerProfile {

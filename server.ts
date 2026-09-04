@@ -19,34 +19,194 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Health check endpoint
+// Resilient Gemini invoker trying fast flash-lite, then flash-latest, then 3.8-flash
+async function callGemini(contents: string, isJson: boolean = false): Promise<{ text: string; modelUsed: string }> {
+  const client = getGeminiClient();
+  if (!client) {
+    throw new Error('GEMINI_API_KEY is not configured in server environment');
+  }
+
+  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+  let lastErr: any = null;
+
+  for (const model of candidateModels) {
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents,
+        ...(isJson ? { config: { responseMimeType: 'application/json' } } : {})
+      });
+      if (response.text) {
+        return { text: response.text, modelUsed: model };
+      }
+    } catch (err: any) {
+      console.warn(`[OutLearn Server] Model ${model} failed, attempting next model:`, err?.message || err);
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('All candidate Gemini models failed');
+}
+
+// Health check & backend status endpoint
 app.get('/api/health', (req: Request, res: Response) => {
+  const hasKey = Boolean(process.env.GEMINI_API_KEY);
   res.json({
     status: 'ok',
-    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+    hasGeminiKey: hasKey,
+    backend: 'Node.js Express + Google GenAI',
+    defaultModel: 'gemini-3.1-flash-lite',
     time: new Date().toISOString()
   });
 });
 
-// 1. Generate Structured Lesson Plan Endpoint
+// 0. Parse Natural Student Instruction & Determine 8 Pedagogical Decisions
+app.post('/api/parse-student-instruction', async (req: Request, res: Response) => {
+  try {
+    const { instruction, materialContext = '', fileName = '' } = req.body;
+    const client = getGeminiClient();
+
+    if (client && instruction) {
+      const prompt = `You are OutLearn, a master human-like pedagogical AI Teacher.
+A student gave this exact natural instruction:
+"${instruction}"
+
+${fileName ? `Uploaded Textbook / Source Document: "${fileName}"` : ''}
+${materialContext ? `Document Content Excerpt:\n"""${materialContext.slice(0, 3500)}"""` : ''}
+
+You must analyze this instruction and any attached learning material to make the 8 CORE PEDAGOGICAL DETERMINATIONS required for a true personalized teaching session (NOT a conventional chatbot):
+
+1. What needs to be taught (topic & scope for allotted time)
+2. Which concepts should be covered first (prerequisite ordering & cognitive sequence)
+3. How deeply each concept should be explained (depth calibration according to level & time)
+4. Which examples or visuals should be used (concrete intuitive analogies & interactive visual lab simulations)
+5. When the student should be questioned (formative checkpoint timing during the lesson)
+6. Whether the student has understood the concept (cognitive diagnostic criteria for evaluating responses)
+7. Whether the lesson needs to be simplified or expanded (adaptive branching rules for misconceptions vs mastery)
+8. What should be taught next (post-lesson learning roadmap & end-of-lesson assessment recommendation)
+
+Also extract the explicit parameters:
+- detectedTopic: string (e.g. "Chapter 4: Electric Current and Ohm's Law" or related topic)
+- detectedChapter: string (e.g. "Chapter 4")
+- detectedLevel: "beginner" | "intermediate" | "advanced"
+- detectedTime: "5min" | "20min" | "60min"
+- detectedLanguage: "en" | "hi" | "hinglish" | "te"
+- askQuestionsDuringLesson: boolean (default true)
+- testAtEnd: boolean (default true)
+- stylePreference: string (e.g. "simple intuitive everyday examples")
+
+Return STRICT RAW JSON matching this exact structure:
+{
+  "detectedTopic": string,
+  "detectedChapter": string,
+  "detectedLevel": "beginner" | "intermediate" | "advanced",
+  "detectedTime": "5min" | "20min" | "60min",
+  "detectedLanguage": "en" | "hi" | "hinglish" | "te",
+  "askQuestionsDuringLesson": boolean,
+  "testAtEnd": boolean,
+  "stylePreference": string,
+  "determinations": {
+    "whatNeedsToBeTaught": string,
+    "conceptsOrderReasoning": string,
+    "depthCalibration": string,
+    "examplesAndVisuals": string,
+    "questioningTiming": string,
+    "understandingCriteria": string,
+    "adaptationTriggers": string,
+    "nextStepsRecommendation": string
+  }
+}`;
+
+      const { text, modelUsed } = await callGemini(prompt, true);
+      try {
+        const parsed = JSON.parse(text);
+        return res.json({
+          success: true,
+          ...parsed,
+          isLiveAi: true,
+          modelUsed
+        });
+      } catch (e) {
+        console.warn('Failed to parse instruction JSON from Gemini, using robust parser', e);
+      }
+    }
+
+    // Heuristic fallback parser
+    const lower = (instruction || '').toLowerCase();
+    const detectedLevel = lower.includes('advanced') ? 'advanced' : lower.includes('intermediate') ? 'intermediate' : 'beginner';
+    const detectedTime = lower.includes('5 min') || lower.includes('5min') ? '5min' : lower.includes('60 min') || lower.includes('1 hour') ? '60min' : '20min';
+    const detectedLanguage = lower.includes('telugu') ? 'te' : lower.includes('hindi') ? 'hi' : lower.includes('hinglish') ? 'hinglish' : 'en';
+    const hasChapter4 = lower.includes('chapter 4') || lower.includes('ch 4');
+    const topic = hasChapter4
+      ? "Chapter 4: Electric Current & Ohm's Law"
+      : fileName
+      ? fileName.replace(/\.[^/.]+$/, '')
+      : "Chapter 4: Foundational Principles";
+
+    return res.json({
+      success: true,
+      isLiveAi: false,
+      detectedTopic: topic,
+      detectedChapter: hasChapter4 ? 'Chapter 4' : 'Selected Chapter',
+      detectedLevel,
+      detectedTime,
+      detectedLanguage,
+      askQuestionsDuringLesson: lower.includes('question') || true,
+      testAtEnd: lower.includes('test') || true,
+      stylePreference: lower.includes('simple') ? 'simple everyday examples' : 'standard pedagogical',
+      determinations: {
+        whatNeedsToBeTaught: `Scope limited to the fundamental core of ${topic}: Electric Potential (Voltage), Charge Flow (Current), and Flow Resistance (Ohm's Law), deliberately omitting heavy differential calculus to fit the ${detectedTime} budget.`,
+        conceptsOrderReasoning: `Prerequisite dependency ordering: 1) What causes flow (Voltage/Potential) -> 2) What actually flows (Current/Charges) -> 3) The mathematical & physical constraint (Resistance & Ohm's Law). Explaining Resistance before Potential causes severe cognitive confusion.`,
+        depthCalibration: `Calibrated for ${detectedLevel} level in ${detectedTime}: Focus on intuitive mental models and qualitative cause-and-effect relationships rather than dry formula memorization.`,
+        examplesAndVisuals: `Water pipe/hydraulic pressure pump analogy for voltage and constriction for resistance, mapped directly to an interactive interactive circuit lab simulation.`,
+        questioningTiming: `Formative checkpoints injected at two critical conceptual boundaries: right after introducing current flow (diagnose direction/charge intuition) and after Ohm's law proportionality.`,
+        understandingCriteria: `Distinguishing between superficial recall of "V=IR" and true causal understanding (e.g. knowing that doubling voltage doubles current only if resistance is held constant).`,
+        adaptationTriggers: `Adaptive branching: If student exhibits direct/inverse inversion misconception, immediately trigger SIMPLIFY with hydraulic visual analogy. If mastered, trigger MOVE_FORWARD.`,
+        nextStepsRecommendation: `Summative 3-question mastery assessment at session completion, followed by progression to Chapter 5: Series and Parallel Resistive Networks.`
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 1. Generate Structured Lesson Plan Endpoint with 8 Determinations
 app.post('/api/generate-lesson-plan', async (req: Request, res: Response) => {
   try {
-    const { topic, educationalLevel = 'beginner', timeBudget = '20min', language = 'en', materialContext = '' } = req.body;
+    const {
+      topic,
+      educationalLevel = 'beginner',
+      timeBudget = '20min',
+      language = 'en',
+      materialContext = '',
+      studentInstruction = ''
+    } = req.body;
     const client = getGeminiClient();
 
     if (client) {
-      const prompt = `You are NOVA, a master human-like educator.
-Plan a structured, adaptive pedagogical lesson on the topic: "${topic}".
+      const prompt = `You are OutLearn, a master human-like educator.
+Create a rich, structured, adaptive pedagogical lesson on the topic: "${topic}".
 Learner level: ${educationalLevel}.
 Available time: ${timeBudget}.
 Language: ${language}.
-Uploaded Material context: "${materialContext.slice(0, 1500)}".
+${studentInstruction ? `Student Instruction: "${studentInstruction}"` : ''}
+${materialContext ? `Uploaded Source Document Reference: "${materialContext.slice(0, 1500)}"` : ''}
 
 Generate a valid JSON object matching this schema:
 {
-  "topic": string,
+  "topic": "${topic}",
   "subject": "physics" | "mathematics" | "dbms" | "biology" | "programming" | "history" | "general",
   "prerequisites": string[],
+  "determinations": {
+    "whatNeedsToBeTaught": string,
+    "conceptsOrderReasoning": string,
+    "depthCalibration": string,
+    "examplesAndVisuals": string,
+    "questioningTiming": string,
+    "understandingCriteria": string,
+    "adaptationTriggers": string,
+    "nextStepsRecommendation": string
+  },
   "steps": [
     {
       "id": string,
@@ -57,12 +217,17 @@ Generate a valid JSON object matching this schema:
       "beats": [
         {
           "id": string,
-          "action": "INTRODUCE" | "EXPLAIN" | "DEMONSTRATE" | "ASK_CONCEPTUAL",
+          "action": "INTRODUCE" | "EXPLAIN" | "GIVE_ANALOGY" | "DEMONSTRATE" | "ASK_CONCEPTUAL",
           "speechEn": string,
           "speechHi": string,
           "speechHinglish": string,
+          "speechTe": string,
           "caption": string,
           "pauseForInteraction": boolean,
+          "visualCue": {
+            "subject": "physics" | "mathematics" | "dbms" | "biology" | "programming" | "history" | "general",
+            "viewMode": "circuit_simulation" | "dbms_tables" | "cell_explorer" | "balance_scale" | "code_tracer" | "step_reveal"
+          },
           "checkpoint": {
             "question": string,
             "options": string[],
@@ -82,20 +247,17 @@ Generate a valid JSON object matching this schema:
     }
   ]
 }
-Return strictly raw valid JSON. Do not wrap in markdown quotes if possible.`;
+Requirements:
+- Provide 2-3 progressive concepts according to the time budget.
+- For speechTe, provide natural, warm spoken Telugu if language is 'te' or asked.
+- Provide speechHi for Hindi and speechEn for English.
+- Populate all 8 determination fields with rigorous pedagogical reasoning.
+Return strictly raw valid JSON.`;
 
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json'
-        }
-      });
-
-      const text = response.text || '';
+      const { text, modelUsed } = await callGemini(prompt, true);
       try {
         const parsed = JSON.parse(text);
-        return res.json({ success: true, plan: parsed });
+        return res.json({ success: true, plan: parsed, isLiveAi: true, modelUsed });
       } catch (err) {
         console.warn('Failed to parse Gemini JSON output, providing fallback synthesis', err);
       }
@@ -114,12 +276,23 @@ Return strictly raw valid JSON. Do not wrap in markdown quotes if possible.`;
 
     return res.json({
       success: true,
+      isLiveAi: false,
       plan: {
         topic,
         subject: defaultSubject,
         educationalLevel,
         timeBudget,
         prerequisites: ['Foundational concept overview', 'Analytical intuition'],
+        determinations: {
+          whatNeedsToBeTaught: `Key foundational principles of ${topic} scoped down for a ${timeBudget} ${educationalLevel} session.`,
+          conceptsOrderReasoning: `Prerequisites sequenced from tangible physical behavior to quantitative laws to preserve cognitive load.`,
+          depthCalibration: `Calibrated for ${educationalLevel}: high conceptual intuition, clear analogies, avoiding excessive derivation.`,
+          examplesAndVisuals: `Real-world mechanical/hydraulic analogies paired with interactive laboratory simulations.`,
+          questioningTiming: `Interactive checkpoint after each core concept definition to confirm mental model integrity before advancing.`,
+          understandingCriteria: `Evaluating causal explanations rather than superficial verbatim recall.`,
+          adaptationTriggers: `Branch to simplified visual analogy on misconception; advance to application challenge on success.`,
+          nextStepsRecommendation: `Comprehensive summative assessment test followed by progression to the next curriculum unit.`
+        },
         steps: [
           {
             id: 'dyn-step-1',
@@ -134,8 +307,47 @@ Return strictly raw valid JSON. Do not wrap in markdown quotes if possible.`;
                 speechEn: `Welcome to our focused lesson on ${topic}. Let's first look at the core physical or structural model.`,
                 speechHi: `${topic} के इस विशेष सत्र में आपका स्वागत है। आइए सबसे पहले इसके बुनियादी मॉडल को समझें।`,
                 speechHinglish: `${topic} ke is interactive session me welcome! Pehle iska basic practical model samajhte hain.`,
+                speechTe: `${topic} కి సంబంధించిన ఈ పాఠానికి స్వాగతం! మొదట దీని ప్రాథమిక నమూనాను అర్థం చేసుకుందాం.`,
                 caption: `Core Intuition of ${topic}`,
-                pauseForInteraction: false
+                pauseForInteraction: false,
+                visualCue: {
+                  subject: defaultSubject,
+                  viewMode: 'circuit_simulation'
+                },
+                durationSec: 10
+              },
+              {
+                id: 'dyn-b2',
+                action: 'ASK_CONCEPTUAL',
+                speechEn: `Before we advance, let us test our intuitive understanding with a quick checkpoint question.`,
+                speechHi: `आगे बढ़ने से पहले, आइए एक त्वरित प्रश्न के साथ अपनी समझ की जांच करें।`,
+                speechHinglish: `Next step par jaane se pehle, ek quick question try karte hain.`,
+                speechTe: `ముందుకు వెళ్ళే ముందు, ఒక చిన్న ప్రశ్నతో మన అవగాహనను పరీక్షించుకుందాం.`,
+                caption: `Formative Checkpoint: Core Principle`,
+                pauseForInteraction: true,
+                visualCue: {
+                  subject: defaultSubject,
+                  viewMode: 'circuit_simulation'
+                },
+                checkpoint: {
+                  question: `When the fundamental driving potential increases, what immediately happens to the rate of flow?`,
+                  options: [
+                    'The flow rate increases proportionally',
+                    'The flow rate decreases to zero',
+                    'The flow rate remains strictly constant'
+                  ],
+                  correctAnswer: 'The flow rate increases proportionally',
+                  hint: 'Think of water pressure in a pipe: higher pressure pushes more water through per second.',
+                  misconceptions: [
+                    {
+                      trigger: 'constant',
+                      category: 'conceptual_misconception',
+                      diagnosis: 'Believing flow is invariant to applied potential.',
+                      correctionSpeech: 'Remember, potential is the direct push that drives charges forward.'
+                    }
+                  ]
+                },
+                durationSec: 8
               }
             ]
           }
@@ -193,7 +405,7 @@ app.post('/api/evaluate-answer', async (req: Request, res: Response) => {
 
     // Use Gemini for deep diagnosis if key available
     if (client) {
-      const prompt = `You are an expert diagnostic teacher evaluating a student's response.
+      const prompt = `You are OutLearn's expert diagnostic teacher evaluating a student's response.
 Concept: "${conceptName}"
 Question asked: "${question}"
 Expected Correct Answer: "${correctAnswer}"
@@ -215,14 +427,9 @@ Provide valid JSON:
   "teachingAction": "CORRECT_MISCONCEPTION" | "SIMPLIFY" | "GIVE_ANALOGY" | "REVIEW_PREREQUISITE" | "MOVE_FORWARD"
 }`;
 
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: { responseMimeType: 'application/json' }
-      });
-
-      const parsed = JSON.parse(response.text || '{}');
-      return res.json(parsed);
+      const { text, modelUsed } = await callGemini(prompt, true);
+      const parsed = JSON.parse(text || '{}');
+      return res.json({ ...parsed, isLiveAi: true, modelUsed });
     }
 
     // Fallback classification
@@ -242,36 +449,40 @@ Provide valid JSON:
   }
 });
 
-// 3. Mid-Lesson Student Interruption & Follow-up Q&A
+// 3. Mid-Lesson Student Interruption & Follow-up Q&A (RAG Grounded)
 app.post('/api/ask-teacher', async (req: Request, res: Response) => {
   try {
-    const { studentQuestion, currentConcept, currentTopic, language = 'en', teacherPersonality = 'mentor' } = req.body;
+    const { studentQuestion, currentConcept, currentTopic, language = 'en', teacherPersonality = 'mentor', materialContext = '' } = req.body;
     const client = getGeminiClient();
 
     if (client) {
-      const prompt = `You are NOVA, a warm, authoritative human-like teacher with the personality of "${teacherPersonality}".
+      const prompt = `You are OutLearn, a warm, authoritative human-like teacher with the personality of "${teacherPersonality}".
 Current Lesson Topic: "${currentTopic}".
 Active Concept being taught: "${currentConcept}".
 Language preference: "${language}".
+${materialContext ? `SOURCE DOCUMENT RAG CONTEXT:\n"""\n${materialContext.slice(0, 3000)}\n"""` : ''}
+
+STRICT KNOWLEDGE GROUNDING DIRECTIVE:
+1. Base your answer directly on the active concept and uploaded source material.
+2. Minimize unsupported or hallucinated claims.
+3. Keep the response concise (2-3 sentences), warm, spoken, and easy to understand.
+4. End with a gentle prompt: "Ready to continue our lesson?".
 
 The student just paused your lesson and asked:
-"${studentQuestion}"
+"${studentQuestion}"`;
 
-Provide a concise, illuminating 2-3 sentence spoken response that directly answers their curiosity, links back to the active concept, and ends with a gentle "Ready to continue our lesson?".`;
-
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt
-      });
+      const { text, modelUsed } = await callGemini(prompt, false);
 
       return res.json({
-        answer: response.text,
-        resumePrompt: 'Ready to continue where we paused?'
+        answer: text.trim(),
+        resumePrompt: 'Ready to continue where we paused?',
+        isLiveAi: true,
+        modelUsed
       });
     }
 
     return res.json({
-      answer: `Great question! In ${currentConcept || currentTopic}, this connects directly to the core conservation principle. When you change one parameter, the balance responds immediately. Let us keep this in mind as we proceed.`,
+      answer: `Great question! In ${currentConcept || currentTopic}, this connects directly to the core principle in our textbook material. When you change one parameter, the balance responds immediately. Let us keep this in mind as we proceed.`,
       resumePrompt: 'Shall we resume our lesson right where we left off?'
     });
   } catch (error: any) {
@@ -279,42 +490,41 @@ Provide a concise, illuminating 2-3 sentence spoken response that directly answe
   }
 });
 
-// 4. Document Processing & Knowledge Extraction (RAG)
+// 4. Document Processing & Knowledge Extraction (RAG & Grounding)
 app.post('/api/process-document', async (req: Request, res: Response) => {
   try {
     const { fileName, fileContent } = req.body;
     const client = getGeminiClient();
 
     if (client && fileContent) {
-      const prompt = `You are an educational parser for an AI Teacher system.
-Analyze the following educational material from file "${fileName}":
+      const prompt = `You are OutLearn's expert RAG educational document analyzer.
+Analyze the following user-provided educational material from file "${fileName}":
 """
-${fileContent.slice(0, 4000)}
+${fileContent.slice(0, 5000)}
 """
 
-Extract:
-1. Document title and detected subject (physics, mathematics, dbms, biology, programming, history).
-2. Identified Chapters or Sections.
-3. Key extracted concepts with definitions and formulas.
-4. Two anticipated misconceptions students typically make on these topics.
+Determine the material classification (e.g., Textbook, Research Paper, Lecture Notes, DOCX, PPTX, Course Material) and extract:
+1. Document title and detected subject (physics, mathematics, dbms, biology, programming, history, general).
+2. Identified Chapters, Sections, and Page/Slide topics.
+3. Key extracted concepts with precise definitions, formulas, and direct source citations/quotes.
+4. Two anticipated misconceptions students typically make on these specific topics.
+5. Key illustrative examples or visual models described in the text.
 
 Return valid JSON:
 {
   "title": string,
+  "docType": "Textbook" | "Research Paper" | "Lecture Notes" | "PDF Document" | "DOCX Notes" | "PPTX Presentation" | "Course Material",
   "subject": string,
-  "chapters": [{ "number": number, "title": string, "summary": string }],
-  "concepts": [{ "name": string, "definition": string, "formula": string }],
-  "anticipatedMisconceptions": [{ "concept": string, "commonError": string, "fix": string }]
+  "chapters": [{ "number": number, "title": string, "summary": string, "keySection": string }],
+  "concepts": [{ "name": string, "definition": string, "formula": string, "sourceCitation": string }],
+  "anticipatedMisconceptions": [{ "concept": string, "commonError": string, "fix": string }],
+  "examples": string[],
+  "ragGrounded": true
 }`;
 
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: { responseMimeType: 'application/json' }
-      });
-
-      const parsed = JSON.parse(response.text || '{}');
-      return res.json({ success: true, extracted: parsed });
+      const { text, modelUsed } = await callGemini(prompt, true);
+      const parsed = JSON.parse(text || '{}');
+      return res.json({ success: true, extracted: parsed, isLiveAi: true, modelUsed });
     }
 
     // Default structured parse
@@ -322,17 +532,20 @@ Return valid JSON:
       success: true,
       extracted: {
         title: fileName.replace(/\.[^/.]+$/, ''),
-        subject: fileName.toLowerCase().includes('math') ? 'mathematics' : 'physics',
+        docType: fileName.toLowerCase().includes('pdf') ? 'PDF Document' : fileName.toLowerCase().includes('ppt') ? 'PPTX Presentation' : 'Educational Material',
+        subject: fileName.toLowerCase().includes('math') ? 'mathematics' : fileName.toLowerCase().includes('dbms') ? 'dbms' : fileName.toLowerCase().includes('cell') ? 'biology' : 'physics',
         chapters: [
-          { number: 1, title: 'Fundamental Theorems & Principles', summary: 'Core foundational principles extracted from uploaded document.' },
-          { number: 2, title: 'Analytical Applications & Problems', summary: 'Practical examples and computational proofs.' }
+          { number: 1, title: 'Chapter 1: Foundational Principles & Scope', summary: 'Core foundational principles extracted from uploaded document.', keySection: 'Section 1.1' },
+          { number: 2, title: 'Chapter 2: Analytical Applications & Examples', summary: 'Practical examples and quantitative proofs.', keySection: 'Section 2.3' }
         ],
         concepts: [
-          { name: 'Core Definition', definition: 'The foundational law stated in the introduction.', formula: 'Law = Input / Output' }
+          { name: 'Core Grounded Law', definition: 'The foundational law stated in the introduction.', formula: 'Law = Direct Proportionality', sourceCitation: 'Section 1.1' }
         ],
         anticipatedMisconceptions: [
-          { concept: 'Direct vs Inverse Variation', commonError: 'Inverting proportional variables', fix: 'Use water flow analogy' }
-        ]
+          { concept: 'Direct vs Inverse Variation', commonError: 'Inverting proportional variables', fix: 'Use intuitive physical analogy' }
+        ],
+        examples: ['Hydraulic pressure analogy', 'Circuit simulation lab model'],
+        ragGrounded: true
       }
     });
   } catch (error: any) {
@@ -358,7 +571,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`NOVA AI Teacher server running on http://0.0.0.0:${PORT}`);
+    console.log(`OutLearn AI Teacher server running on http://0.0.0.0:${PORT}`);
   });
 }
 

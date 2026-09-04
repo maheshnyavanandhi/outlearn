@@ -18,8 +18,8 @@ export const PhysicsCircuitVisual: React.FC<PhysicsCircuitVisualProps> = ({
   annotation,
   onStateChange
 }) => {
-  const [voltage, setVoltage] = useState(initialVoltage);
-  const [resistance, setResistance] = useState(initialResistance);
+  const [voltage, setVoltage] = useState<number>(initialVoltage ?? 9);
+  const [resistance, setResistance] = useState<number>(initialResistance ?? 10);
   const [mode, setMode] = useState<'circuit' | 'analogy'>(showAnalogyMode ? 'analogy' : 'circuit');
   const [electronOffset, setElectronOffset] = useState(0);
 
@@ -279,7 +279,7 @@ export const PhysicsCircuitVisual: React.FC<PhysicsCircuitVisualProps> = ({
             min="1"
             max="24"
             step="1"
-            value={voltage}
+            value={voltage ?? 9}
             onChange={(e) => setVoltage(Number(e.target.value))}
             className="w-full accent-[#1C1C1C] cursor-pointer h-1.5 bg-[#E2DED6] rounded-lg"
           />
@@ -299,7 +299,7 @@ export const PhysicsCircuitVisual: React.FC<PhysicsCircuitVisualProps> = ({
             min="1"
             max="60"
             step="1"
-            value={resistance}
+            value={resistance ?? 10}
             onChange={(e) => setResistance(Number(e.target.value))}
             className="w-full accent-[#1C1C1C] cursor-pointer h-1.5 bg-[#E2DED6] rounded-lg"
           />
