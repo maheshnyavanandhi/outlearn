@@ -19,6 +19,58 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+// Clean and parse JSON from LLM output (handles code fences, commentary, trailing text, control chars)
+function cleanAndParseJson<T = any>(rawText: string): T {
+  if (!rawText) throw new SyntaxError('Empty response text');
+  let text = rawText.trim();
+
+  // Strip markdown code block wrappers
+  if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+
+  // Try direct parse first
+  try {
+    return JSON.parse(text);
+  } catch (initialErr) {
+    // Locate first { or [ and last } or ]
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+
+    let startIdx = -1;
+    let isObject = true;
+
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      isObject = true;
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      isObject = false;
+    }
+
+    if (startIdx !== -1) {
+      const lastIdx = isObject ? text.lastIndexOf('}') : text.lastIndexOf(']');
+      if (lastIdx > startIdx) {
+        const jsonSubstring = text.slice(startIdx, lastIdx + 1);
+        try {
+          return JSON.parse(jsonSubstring);
+        } catch (subErr) {
+          // Clean unescaped control chars and trailing commas
+          const sanitized = jsonSubstring
+            .replace(/,\s*([\}\]])/g, '$1')
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, (match) => {
+              if (match === '\n' || match === '\r' || match === '\t') return match;
+              return '';
+            });
+          return JSON.parse(sanitized);
+        }
+      }
+    }
+
+    throw initialErr;
+  }
+}
+
 // Resilient Gemini invoker trying fast flash-lite, then flash-latest, then 3.8-flash
 async function callGemini(contents: string, isJson: boolean = false): Promise<{ text: string; modelUsed: string }> {
   const client = getGeminiClient();
@@ -119,7 +171,7 @@ Return STRICT RAW JSON matching this exact structure:
 
       const { text, modelUsed } = await callGemini(prompt, true);
       try {
-        const parsed = JSON.parse(text);
+        const parsed = cleanAndParseJson(text);
         return res.json({
           success: true,
           ...parsed,
@@ -132,22 +184,31 @@ Return STRICT RAW JSON matching this exact structure:
     }
 
     // Heuristic fallback parser
-    const lower = (instruction || '').toLowerCase();
-    const detectedLevel = lower.includes('advanced') ? 'advanced' : lower.includes('intermediate') ? 'intermediate' : 'beginner';
+    const lower = `${instruction || ''} ${fileName || ''}`.toLowerCase();
+    const detectedLevel = (lower.includes('advanced') || lower.includes('interview')) ? 'advanced' : lower.includes('intermediate') ? 'intermediate' : 'beginner';
     const detectedTime = lower.includes('5 min') || lower.includes('5min') ? '5min' : lower.includes('60 min') || lower.includes('1 hour') ? '60min' : '20min';
     const detectedLanguage = lower.includes('telugu') ? 'te' : lower.includes('hindi') ? 'hi' : lower.includes('hinglish') ? 'hinglish' : 'en';
-    const hasChapter4 = lower.includes('chapter 4') || lower.includes('ch 4');
-    const topic = hasChapter4
-      ? "Chapter 4: Electric Current & Ohm's Law"
-      : fileName
-      ? fileName.replace(/\.[^/.]+$/, '')
-      : "Chapter 4: Foundational Principles";
+    
+    let topic = "Fundamental Core Concepts";
+    if (lower.includes('python') || lower.includes('lab') || lower.includes('programming')) {
+      topic = fileName ? fileName.replace(/\.[^/.]+$/, '') : "Python Programming Laboratory";
+    } else if (lower.includes('artificial intelligence') || lower.includes('ai')) {
+      topic = "Artificial Intelligence: From Fundamentals to Neural Networks";
+    } else if (lower.includes('newton')) {
+      topic = "Newton's Laws of Motion (Class 8 Level)";
+    } else if (lower.includes('react')) {
+      topic = "React Concepts for Technical Interviews";
+    } else if (lower.includes('chapter 4') || lower.includes('ch 4')) {
+      topic = "Chapter 4: Electric Current & Ohm's Law";
+    } else if (fileName) {
+      topic = fileName.replace(/\.[^/.]+$/, '');
+    }
 
     return res.json({
       success: true,
       isLiveAi: false,
       detectedTopic: topic,
-      detectedChapter: hasChapter4 ? 'Chapter 4' : 'Selected Chapter',
+      detectedChapter: 'Selected Chapter',
       detectedLevel,
       detectedTime,
       detectedLanguage,
@@ -155,20 +216,39 @@ Return STRICT RAW JSON matching this exact structure:
       testAtEnd: lower.includes('test') || true,
       stylePreference: lower.includes('simple') ? 'simple everyday examples' : 'standard pedagogical',
       determinations: {
-        whatNeedsToBeTaught: `Scope limited to the fundamental core of ${topic}: Electric Potential (Voltage), Charge Flow (Current), and Flow Resistance (Ohm's Law), deliberately omitting heavy differential calculus to fit the ${detectedTime} budget.`,
-        conceptsOrderReasoning: `Prerequisite dependency ordering: 1) What causes flow (Voltage/Potential) -> 2) What actually flows (Current/Charges) -> 3) The mathematical & physical constraint (Resistance & Ohm's Law). Explaining Resistance before Potential causes severe cognitive confusion.`,
-        depthCalibration: `Calibrated for ${detectedLevel} level in ${detectedTime}: Focus on intuitive mental models and qualitative cause-and-effect relationships rather than dry formula memorization.`,
-        examplesAndVisuals: `Water pipe/hydraulic pressure pump analogy for voltage and constriction for resistance, mapped directly to an interactive interactive circuit lab simulation.`,
-        questioningTiming: `Formative checkpoints injected at two critical conceptual boundaries: right after introducing current flow (diagnose direction/charge intuition) and after Ohm's law proportionality.`,
-        understandingCriteria: `Distinguishing between superficial recall of "V=IR" and true causal understanding (e.g. knowing that doubling voltage doubles current only if resistance is held constant).`,
-        adaptationTriggers: `Adaptive branching: If student exhibits direct/inverse inversion misconception, immediately trigger SIMPLIFY with hydraulic visual analogy. If mastered, trigger MOVE_FORWARD.`,
-        nextStepsRecommendation: `Summative 3-question mastery assessment at session completion, followed by progression to Chapter 5: Series and Parallel Resistive Networks.`
+        whatNeedsToBeTaught: `Scope limited to the essential building blocks of ${topic} tailored for a ${detectedTime} ${detectedLevel} session.`,
+        conceptsOrderReasoning: `Prerequisite dependency ordering: 1) Core Definitions & Mental Model -> 2) Operational Mechanics & Execution -> 3) Application & Edge Cases.`,
+        depthCalibration: `Calibrated for ${detectedLevel} level in ${detectedTime}: Focus on high conceptual clarity, interactive step-by-step tracing, and practical examples.`,
+        examplesAndVisuals: `Interactive visual demonstrations and step-by-step laboratory execution models.`,
+        questioningTiming: `Formative checkpoints injected at key concept transitions to verify mental model integrity before advancing.`,
+        understandingCriteria: `Evaluating causal problem-solving and underlying reasoning rather than rote memory recall.`,
+        adaptationTriggers: `Adaptive branching: Simplify with tangible visual analogies if misconceptions occur; advance to challenge problems on mastery.`,
+        nextStepsRecommendation: `Summative assessment evaluation at session end, followed by recommended next steps.`
       }
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Helper to detect domain subject accurately
+function detectSubjectFromText(topic: string, instruction = '', content = ''): 'physics' | 'dbms' | 'biology' | 'mathematics' | 'programming' {
+  const combined = `${topic} ${instruction} ${content}`.toLowerCase();
+  
+  if (combined.includes('dbms') || combined.includes('sql') || combined.includes('relational') || combined.includes('database') || combined.includes('schema') || combined.includes('join')) {
+    return 'dbms';
+  }
+  if (combined.includes('biology') || combined.includes('cell') || combined.includes('respiration') || combined.includes('plant') || combined.includes('organ') || combined.includes('gene')) {
+    return 'biology';
+  }
+  if (combined.includes('math') || combined.includes('algebra') || combined.includes('calculus') || combined.includes('equation') || combined.includes('trigonometry')) {
+    return 'mathematics';
+  }
+  if (combined.includes('ohm') || combined.includes('voltage') || combined.includes('circuit') || combined.includes('physics') || combined.includes('newton') || combined.includes('electricity') || combined.includes('gravity')) {
+    return 'physics';
+  }
+  return 'programming'; // default for python, code, react, ai, programming, lab manuals, cs, general
+}
 
 // 1. Generate Structured Lesson Plan Endpoint with 8 Determinations
 app.post('/api/generate-lesson-plan', async (req: Request, res: Response) => {
@@ -183,9 +263,12 @@ app.post('/api/generate-lesson-plan', async (req: Request, res: Response) => {
     } = req.body;
     const client = getGeminiClient();
 
+    const targetSubject = detectSubjectFromText(topic, studentInstruction, materialContext);
+
     if (client) {
       const prompt = `You are OutLearn, a master human-like educator.
 Create a rich, structured, adaptive pedagogical lesson on the topic: "${topic}".
+Domain Subject: ${targetSubject}.
 Learner level: ${educationalLevel}.
 Available time: ${timeBudget}.
 Language: ${language}.
@@ -195,7 +278,7 @@ ${materialContext ? `Uploaded Source Document Reference: "${materialContext.slic
 Generate a valid JSON object matching this schema:
 {
   "topic": "${topic}",
-  "subject": "physics" | "mathematics" | "dbms" | "biology" | "programming" | "history" | "general",
+  "subject": "${targetSubject}",
   "prerequisites": string[],
   "determinations": {
     "whatNeedsToBeTaught": string,
@@ -225,7 +308,7 @@ Generate a valid JSON object matching this schema:
           "caption": string,
           "pauseForInteraction": boolean,
           "visualCue": {
-            "subject": "physics" | "mathematics" | "dbms" | "biology" | "programming" | "history" | "general",
+            "subject": "${targetSubject}",
             "viewMode": "circuit_simulation" | "dbms_tables" | "cell_explorer" | "balance_scale" | "code_tracer" | "step_reveal"
           },
           "checkpoint": {
@@ -256,23 +339,17 @@ Return strictly raw valid JSON.`;
 
       const { text, modelUsed } = await callGemini(prompt, true);
       try {
-        const parsed = JSON.parse(text);
+        const parsed = cleanAndParseJson(text);
+        if (!parsed.subject) parsed.subject = targetSubject;
         return res.json({ success: true, plan: parsed, isLiveAi: true, modelUsed });
       } catch (err) {
         console.warn('Failed to parse Gemini JSON output, providing fallback synthesis', err);
       }
     }
 
-    // Pedagogically solid fallback synthesis if no key or parsing fails
-    const defaultSubject = topic.toLowerCase().includes('database') || topic.toLowerCase().includes('sql') || topic.toLowerCase().includes('relational')
-      ? 'dbms'
-      : topic.toLowerCase().includes('cell') || topic.toLowerCase().includes('plant') || topic.toLowerCase().includes('biology')
-      ? 'biology'
-      : topic.toLowerCase().includes('ohm') || topic.toLowerCase().includes('current') || topic.toLowerCase().includes('physics') || topic.toLowerCase().includes('circuit')
-      ? 'physics'
-      : topic.toLowerCase().includes('code') || topic.toLowerCase().includes('react') || topic.toLowerCase().includes('python') || topic.toLowerCase().includes('ai')
-      ? 'programming'
-      : 'physics';
+    // Pedagogically solid fallback synthesis matching target subject
+    const defaultSubject = targetSubject;
+    const viewMode = defaultSubject === 'dbms' ? 'dbms_tables' : defaultSubject === 'biology' ? 'cell_explorer' : defaultSubject === 'mathematics' ? 'balance_scale' : defaultSubject === 'physics' ? 'circuit_simulation' : 'code_tracer';
 
     return res.json({
       success: true,
@@ -428,7 +505,7 @@ Provide valid JSON:
 }`;
 
       const { text, modelUsed } = await callGemini(prompt, true);
-      const parsed = JSON.parse(text || '{}');
+      const parsed = cleanAndParseJson(text || '{}');
       return res.json({ ...parsed, isLiveAi: true, modelUsed });
     }
 
@@ -523,7 +600,7 @@ Return valid JSON:
 }`;
 
       const { text, modelUsed } = await callGemini(prompt, true);
-      const parsed = JSON.parse(text || '{}');
+      const parsed = cleanAndParseJson(text || '{}');
       return res.json({ success: true, extracted: parsed, isLiveAi: true, modelUsed });
     }
 

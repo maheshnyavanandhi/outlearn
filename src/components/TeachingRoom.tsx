@@ -1,29 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
+import React, { useState } from 'react';
 import {
   LessonPlan,
   LearnerProfile,
-  TeachingBeat,
-  TeachingActionLogEntry,
   LanguageCode,
-  TeacherPersonality,
-  MisconceptionCategory
+  TeacherPersonality
 } from '../types';
 import { SUPPORTED_LANGUAGES, TEACHER_PERSONALITIES } from '../data/curriculumData';
-import { speechService } from '../services/speechService';
 import { TeacherAvatar } from './TeacherAvatar';
 import { PhysicsCircuitVisual } from './visuals/PhysicsCircuitVisual';
 import { DbmsRelationalVisual } from './visuals/DbmsRelationalVisual';
 import { BiologyCellVisual } from './visuals/BiologyCellVisual';
 import { CodeExecutionVisual } from './visuals/CodeExecutionVisual';
 import { MathStepsVisual } from './visuals/MathStepsVisual';
+import { useLessonOrchestrator, LifecyclePhase } from '../hooks/useLessonOrchestrator';
 import {
   Play,
   Pause,
   RotateCcw,
   Volume2,
   VolumeX,
-  Languages,
   MessageCircleQuestion,
   CheckCircle2,
   AlertTriangle,
@@ -32,7 +27,12 @@ import {
   ListOrdered,
   X,
   Send,
-  GraduationCap
+  GraduationCap,
+  Brain,
+  Layers,
+  HelpCircle,
+  Lightbulb,
+  Check
 } from 'lucide-react';
 
 interface TeachingRoomProps {
@@ -48,330 +48,139 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   onUpdateProfile,
   onFinishLesson
 }) => {
-  // Step & Beat index
-  const [currentStepIdx, setCurrentStepIdx] = useState(0);
-  const [currentBeatIdx, setCurrentBeatIdx] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const orchestrator = useLessonOrchestrator({
+    lessonPlan,
+    learnerProfile,
+    onUpdateProfile,
+    onFinishLesson
+  });
+
+  const {
+    lifecyclePhase,
+    currentStepIdx,
+    currentBeatIdx,
+    currentStep,
+    currentBeat,
+    activeSpeechText,
+    understandSummary,
+    planSummary,
+    isPlaying,
+    isSpeaking,
+    speechRate,
+    isMuted,
+    activeLanguage,
+    teacherPersonality,
+    isAwaitingResponse,
+    selectedOption,
+    freeTextAnswer,
+    isSubmittingAnswer,
+    activeMisconception,
+    showAnalogyAlternative,
+    isAskModalOpen,
+    studentQuery,
+    teacherAnswer,
+    teacherAnswerMeta,
+    isQueryLoading,
+    decisionLogs,
+    isLessonCompleted,
+    handleTogglePlay,
+    handleReplayBeat,
+    setSpeechRate,
+    setIsMuted,
+    setActiveLanguage,
+    setTeacherPersonality,
+    advanceToNextBeat,
+    setSelectedOption,
+    setFreeTextAnswer,
+    handleCheckAnswer,
+    handleContinueFromMisconception,
+    setIsAskModalOpen,
+    setStudentQuery,
+    handleAskTeacher,
+    handleJumpToStep
+  } = orchestrator;
+
   const [showCaptions, setShowCaptions] = useState(true);
-  const [speechRate, setSpeechRate] = useState<number>(1.0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(lessonPlan?.language || 'en');
-  const [teacherPersonality, setTeacherPersonality] = useState<TeacherPersonality>(lessonPlan?.teacherPersonality || 'mentor');
-
-  // Checkpoint Interaction State
-  const [isAwaitingResponse, setIsAwaitingResponse] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<string>('');
-  const [freeTextAnswer, setFreeTextAnswer] = useState<string>('');
-  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
-
-  // Misconception & Adaptation State
-  const [activeMisconception, setActiveMisconception] = useState<{
-    category: MisconceptionCategory;
-    name: string;
-    diagnosis: string;
-    speech: string;
-  } | null>(null);
-  const [showAnalogyAlternative, setShowAnalogyAlternative] = useState(false);
-
-  // Interruption modal (Student asks question mid-lesson)
-  const [isAskModalOpen, setIsAskModalOpen] = useState(false);
-  const [studentQuery, setStudentQuery] = useState('');
-  const [teacherAnswer, setTeacherAnswer] = useState<string | null>(null);
-  const [teacherAnswerMeta, setTeacherAnswerMeta] = useState<{ isLiveAi: boolean; modelUsed?: string } | null>(null);
-  const [isQueryLoading, setIsQueryLoading] = useState(false);
-
-  // Decision State Machine Log (Inspectable for evaluators!)
-  const [decisionLogs, setDecisionLogs] = useState<TeachingActionLogEntry[]>([]);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
   const [isDeterminationsModalOpen, setIsDeterminationsModalOpen] = useState(false);
-  const [isLessonCompleted, setIsLessonCompleted] = useState(false);
 
-  const currentStep = lessonPlan.steps[currentStepIdx] || lessonPlan.steps[0];
-  const currentBeat: TeachingBeat =
-    currentStep?.beats[currentBeatIdx] || currentStep?.beats[0];
-
-  // Subscribe to speech service speaking state
-  useEffect(() => {
-    const unsub = speechService.subscribe((speaking) => {
-      setIsSpeaking(speaking);
-    });
-    return () => {
-      unsub();
-      speechService.stop();
-    };
-  }, []);
-
-  // Log teaching actions whenever beat changes
-  const logTeachingAction = (action: any, conceptName: string, reason: string, strategy?: string) => {
-    const entry: TeachingActionLogEntry = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      action,
-      conceptName,
-      reason,
-      strategySwitched: strategy
-    };
-    setDecisionLogs((prev) => [entry, ...prev.slice(0, 25)]);
-  };
-
-  // Deliver current beat speech
-  const deliverBeatSpeech = (beat: TeachingBeat) => {
-    if (!beat) return;
-
-    let textToSpeak = beat.speechEn;
-    if (activeLanguage === 'hi' && beat.speechHi) {
-      textToSpeak = beat.speechHi;
-    } else if (activeLanguage === 'te' && beat.speechTe) {
-      textToSpeak = beat.speechTe;
-    } else if (activeLanguage === 'hinglish' && beat.speechHinglish) {
-      textToSpeak = beat.speechHinglish;
-    }
-
-    logTeachingAction(beat.action, currentStep.concept.name, `Executing ${beat.action} beat in ${activeLanguage}`);
-
-    if (isMuted) {
-      // If muted, wait for beat duration then advance if not checkpoint
-      if (beat.pauseForInteraction) {
-        setIsAwaitingResponse(true);
-        setIsPlaying(false);
-      }
-      return;
-    }
-
-    speechService.speak(textToSpeak, activeLanguage, {
-      rate: speechRate,
-      onEnd: () => {
-        if (beat.pauseForInteraction) {
-          setIsAwaitingResponse(true);
-          setIsPlaying(false);
-        } else if (isPlaying) {
-          // Auto advance to next beat after short pause
-          setTimeout(() => {
-            advanceToNextBeat();
-          }, 800);
-        }
-      }
-    });
-  };
-
-  // Play current beat on mount or beat change if isPlaying is true
-  useEffect(() => {
-    if (isPlaying && currentBeat) {
-      deliverBeatSpeech(currentBeat);
-    }
-  }, [currentStepIdx, currentBeatIdx, isPlaying, activeLanguage]);
-
-  // Toggle Play / Pause
-  const handleTogglePlay = () => {
-    if (isPlaying) {
-      speechService.stop();
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      if (currentBeat) {
-        deliverBeatSpeech(currentBeat);
-      }
-    }
-  };
-
-  // Replay current beat
-  const handleReplayBeat = () => {
-    speechService.stop();
-    setIsPlaying(true);
-    if (currentBeat) {
-      deliverBeatSpeech(currentBeat);
-    }
-  };
-
-  // Advance to next beat or next concept
-  const advanceToNextBeat = () => {
-    if (currentBeatIdx < currentStep.beats.length - 1) {
-      setCurrentBeatIdx((prev) => prev + 1);
-    } else if (currentStepIdx < lessonPlan.steps.length - 1) {
-      // Move to next step
-      setCurrentStepIdx((prev) => prev + 1);
-      setCurrentBeatIdx(0);
-      logTeachingAction('MOVE_FORWARD', lessonPlan.steps[currentStepIdx + 1].concept.name, 'Mastery gate cleared. Moving forward.');
-    } else {
-      // Completed all steps!
-      setIsPlaying(false);
-      setIsLessonCompleted(true);
-      logTeachingAction('ASSESS', 'Lesson Final Assessment', 'All concept steps completed.');
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    }
-  };
-
-  // Handle Checkpoint Answer Evaluation with Deep Misconception Classification
-  const handleEvaluateCheckpoint = async (submittedAnswer: string) => {
-    if (!currentBeat.checkpoint || isSubmittingAnswer) return;
-
-    setIsSubmittingAnswer(true);
-    const cp = currentBeat.checkpoint;
-
-    try {
-      const res = await fetch('/api/evaluate-answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: cp.question,
-          studentAnswer: submittedAnswer,
-          correctAnswer: cp.correctAnswer,
-          conceptName: currentStep.concept.name,
-          knownMisconceptions: cp.knownMisconceptions
-        })
-      });
-
-      const data = await res.json();
-
-      if (data.isCorrect) {
-        // Concept Mastered!
-        setActiveMisconception(null);
-        setIsAwaitingResponse(false);
-        setIsSubmittingAnswer(false);
-
-        // Update learner profile concept mastery
-        const updatedProfile = {
-          ...learnerProfile,
-          conceptMastery: {
-            ...learnerProfile.conceptMastery,
-            [currentStep.concept.id]: 'mastered' as const
-          }
-        };
-        onUpdateProfile(updatedProfile);
-
-        logTeachingAction(
-          'MOVE_FORWARD',
-          currentStep.concept.name,
-          `Checkpoint Passed. Concept mastery marked understood${data.modelUsed ? ` (Evaluated by ${data.modelUsed})` : ''}.`
-        );
-
-        confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
-
-        // Speak congratulatory encouragement
-        speechService.speak(
-          activeLanguage === 'hi'
-            ? 'शाबाश! आपने सिद्धांत को बिल्कुल सही समझा। आइए आगे बढ़ते हैं।'
-            : activeLanguage === 'te'
-            ? 'అద్భుతం! మీరు సరైన సూత్రాన్ని అర్థం చేసుకున్నారు. ముందుకు వెళ్దాం.'
-            : activeLanguage === 'hinglish'
-            ? 'Perfect! Aapka logic bilkul accurate hai. Ab next step dekhte hain.'
-            : 'Excellent work! You understood the core principle. Let us proceed.',
-          activeLanguage,
-          {
-            rate: speechRate,
-            onEnd: () => {
-              advanceToNextBeat();
-              setIsPlaying(true);
-            }
-          }
-        );
-      } else {
-        // Misconception Detected!
-        const misName = data.misconceptionName || 'Conceptual Misconception';
-        const misDiagnosis = data.diagnosedThought || 'Identified flawed mental model';
-        const correctiveSpeech = data.correctiveSpeech || 'Let us revisit this with a clearer analogy.';
-
-        setActiveMisconception({
-          category: data.category || 'conceptual_misconception',
-          name: misName,
-          diagnosis: misDiagnosis,
-          speech: correctiveSpeech
-        });
-
-        // Switch visual representation to analogy or counterexample
-        if (currentStep.concept.subject === 'physics') {
-          setShowAnalogyAlternative(true);
-        }
-
-        // Log the adaptation action
-        logTeachingAction(
-          'CORRECT_MISCONCEPTION',
-          currentStep.concept.name,
-          `Misconception Detected: ${misName} (${misDiagnosis}). Strategy switched to ${data.suggestedStrategy || 'analogy'}.`,
-          data.suggestedStrategy || 'analogy'
-        );
-
-        setIsSubmittingAnswer(false);
-
-        // Speak the corrective intervention
-        speechService.speak(correctiveSpeech, activeLanguage, {
-          rate: speechRate
-        });
-      }
-    } catch (err) {
-      console.warn('Evaluation error, falling back locally', err);
-      setIsSubmittingAnswer(false);
-      setIsAwaitingResponse(false);
-      advanceToNextBeat();
-    }
-  };
-
-  // Student asks mid-lesson question
-  const handleAskTeacher = async () => {
-    if (!studentQuery.trim() || isQueryLoading) return;
-
-    setIsQueryLoading(true);
-    speechService.stop();
-
-    try {
-      const res = await fetch('/api/ask-teacher', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentQuestion: studentQuery,
-          currentConcept: currentStep.concept.name,
-          currentTopic: lessonPlan.topic,
-          language: activeLanguage,
-          teacherPersonality
-        })
-      });
-
-      const data = await res.json();
-      setTeacherAnswer(data.answer);
-      setTeacherAnswerMeta({ isLiveAi: Boolean(data.isLiveAi), modelUsed: data.modelUsed });
-      setIsQueryLoading(false);
-
-      speechService.speak(data.answer, activeLanguage, {
-        rate: speechRate
-      });
-    } catch (err) {
-      setTeacherAnswer(`In ${currentStep.concept.name}, this connects directly to the foundational law we just explored!`);
-      setTeacherAnswerMeta({ isLiveAi: false });
-      setIsQueryLoading(false);
-    }
-  };
+  // Lifecycle stage progression definition
+  const lifecycleStages: { phase: LifecyclePhase; label: string; icon: any }[] = [
+    { phase: 'UNDERSTAND', label: 'Understand', icon: Brain },
+    { phase: 'PLAN', label: 'Plan', icon: Layers },
+    { phase: 'EXPLAIN', label: 'Explain', icon: Sparkles },
+    { phase: 'QUESTION', label: 'Question', icon: HelpCircle },
+    { phase: 'ADAPT', label: 'Adapt', icon: Lightbulb }
+  ];
 
   return (
     <div className="w-full min-h-[90vh] flex flex-col bg-[#F9F8F6] text-[#1C1C1C]" id="teaching-room-root">
-      {/* Top Persistent Lesson Context Strip */}
-      <div className="px-4 py-3 bg-[#FFFFFF] border-b border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
+      {/* Top Persistent Lesson Context & Lifecycle Indicator Strip */}
+      <div className="px-4 py-2.5 bg-[#FFFFFF] border-b border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="w-2.5 h-2.5 rounded-full bg-[#1C1C1C] animate-pulse" />
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm sm:text-base font-serif font-bold text-[#1C1C1C]">{lessonPlan.topic}</h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15">
-                Step {currentStepIdx + 1}/{lessonPlan.steps.length}
+                Step {currentStepIdx + 1}/{lessonPlan.steps?.length || 1}
               </span>
               <span className="hidden lg:inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono border border-emerald-300/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                <span>Backend Live</span>
+                <span>AI Orchestrator Active</span>
               </span>
-              {lessonPlan.ragGrounded && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] font-mono hidden sm:inline-flex">
-                  Grounded: {lessonPlan.sourceDocumentName || 'Curriculum'}
-                </span>
-              )}
             </div>
             <p className="text-xs text-[#666666] truncate max-w-md">
-              Teaching: <strong className="text-[#1C1C1C] font-serif">{currentStep.concept.name}</strong>
+              Teaching: <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || lessonPlan.topic}</strong>
             </p>
           </div>
         </div>
 
+        {/* AI Interaction Lifecycle Process Bar (Understand -> Plan -> Explain -> Question -> Adapt) */}
+        <div className="hidden md:flex items-center gap-1 bg-[#F4F1EA] p-1 rounded-xl border border-[#1C1C1C]/15">
+          {lifecycleStages.map((stage, idx) => {
+            const Icon = stage.icon;
+            const isActive = lifecyclePhase === stage.phase;
+            const isPassed =
+              (stage.phase === 'UNDERSTAND' && lifecyclePhase !== 'UNDERSTAND') ||
+              (stage.phase === 'PLAN' && !['UNDERSTAND', 'PLAN'].includes(lifecyclePhase)) ||
+              (stage.phase === 'EXPLAIN' && ['QUESTION', 'ADAPT', 'COMPLETED'].includes(lifecyclePhase));
+
+            return (
+              <React.Fragment key={stage.phase}>
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium font-mono transition-all ${
+                    isActive
+                      ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-sm font-bold'
+                      : isPassed
+                      ? 'text-[#1C1C1C] bg-[#E6E3DB]'
+                      : 'text-[#888888]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{stage.label}</span>
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />}
+                </div>
+                {idx < lifecycleStages.length - 1 && (
+                  <span className="text-[#888888] text-[10px] font-mono">→</span>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
         {/* Action Controls & Finish Assessment Button */}
         <div className="flex items-center gap-2">
+          {/* Blueprint Determinations Button */}
+          <button
+            onClick={() => setIsDeterminationsModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#E6E3DB] text-xs font-semibold flex items-center gap-1.5 transition-all"
+            title="Inspect 8 Pedagogical Determinations"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+            <span className="hidden sm:inline">8 Determinations</span>
+          </button>
+
           {/* Decision State Machine Drawer Toggle */}
           <button
             onClick={() => setIsLogDrawerOpen((v) => !v)}
@@ -411,6 +220,22 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         </div>
       </div>
 
+      {/* Lifecycle Banner during UNDERSTAND or PLAN Phase */}
+      {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN') && (
+        <div className="bg-[#1C1C1C] text-[#F9F8F6] px-4 py-2 flex items-center justify-between text-xs font-mono shadow-inner animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded bg-[#333333] text-amber-400">
+              {lifecyclePhase === 'UNDERSTAND' ? <Brain className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+            </span>
+            <span>
+              <strong>AI TEACHER LIFECYCLE [{lifecyclePhase}]:</strong>{' '}
+              {lifecyclePhase === 'UNDERSTAND' ? understandSummary : planSummary}
+            </span>
+          </div>
+          <span className="text-[10px] text-[#A0A0A0] hidden sm:inline">Initializing interaction engine...</span>
+        </div>
+      )}
+
       {/* Main Split-Stage Arena */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-7xl mx-auto w-full">
         {/* Left Column: AI Teacher Zone (Avatar + Teacher Persona + Speech status) */}
@@ -421,9 +246,9 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               personality={teacherPersonality}
               isSpeaking={isSpeaking}
               teacherMood={
-                isAwaitingResponse
+                lifecyclePhase === 'QUESTION'
                   ? 'listening'
-                  : activeMisconception
+                  : lifecyclePhase === 'ADAPT'
                   ? 'questioning'
                   : isSpeaking
                   ? 'explaining'
@@ -431,6 +256,13 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               }
               size="md"
             />
+
+            {/* Active Lifecycle Phase Indicator Badge */}
+            <div className="mt-2 text-center">
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 uppercase tracking-wider font-bold">
+                Phase: {lifecyclePhase}
+              </span>
+            </div>
 
             {/* Personality Selector Dropdown */}
             <div className="w-full mt-3 pt-3 border-t border-[#1C1C1C]/10">
@@ -455,18 +287,40 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-3.5 shadow-sm">
             <button
               onClick={() => {
-                speechService.stop();
-                setIsPlaying(false);
                 setIsAskModalOpen(true);
               }}
               className="w-full py-2.5 px-3 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
             >
               <MessageCircleQuestion className="w-4 h-4 text-[#1C1C1C]" />
-              <span>Ask Teacher / Pause Lesson</span>
+              <span>Ask Teacher / Interrupt Lesson</span>
             </button>
             <p className="text-[10px] text-[#777777] text-center mt-1.5 font-sans">
               Curious? Interrupt anytime — OutLearn maintains lesson context.
             </p>
+          </div>
+
+          {/* Concept Navigation Stepper */}
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-3 text-xs shadow-sm">
+            <h4 className="text-[11px] uppercase font-mono font-bold text-[#1C1C1C] tracking-wider mb-2 flex items-center justify-between">
+              <span>Curriculum Steps</span>
+              <span className="text-[10px] text-[#777777] font-normal font-sans">Click to jump</span>
+            </h4>
+            <div className="space-y-1">
+              {lessonPlan.steps.map((step, idx) => (
+                <button
+                  key={step.id || idx}
+                  onClick={() => handleJumpToStep(idx)}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
+                    idx === currentStepIdx
+                      ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-sm'
+                      : 'bg-[#F9F8F6] hover:bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10'
+                  }`}
+                >
+                  <span className="truncate">{idx + 1}. {step.concept.name}</span>
+                  {idx === currentStepIdx && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Current Concept Metadata & Key Formulas */}
@@ -475,9 +329,9 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               Concept Blueprint
             </h4>
             <p className="text-[#555555] text-[11px] leading-relaxed mb-2 font-serif">
-              {currentStep.concept.summary}
+              {currentStep?.concept?.summary || 'Key principles and foundational intuition.'}
             </p>
-            {currentStep.concept.keyFormulas && currentStep.concept.keyFormulas.length > 0 && (
+            {currentStep?.concept?.keyFormulas && currentStep.concept.keyFormulas.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {currentStep.concept.keyFormulas.map((f, i) => (
                   <span key={i} className="px-2 py-0.5 rounded bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] font-mono text-[10px]">
@@ -494,51 +348,68 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           {/* Visual Canvas Area */}
           <div className="flex-1 min-h-[380px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm">
             {/* Dynamic Subject Visual Rendering */}
-            {currentStep.concept.subject === 'physics' ? (
-              <PhysicsCircuitVisual
-                showAnalogyMode={showAnalogyAlternative}
-                highlightTarget={currentBeat.visualCue?.highlightTarget}
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            ) : currentStep.concept.subject === 'dbms' ? (
-              <DbmsRelationalVisual
-                highlightTarget={currentBeat.visualCue?.highlightTarget}
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            ) : currentStep.concept.subject === 'biology' ? (
-              <BiologyCellVisual
-                highlightTarget={currentBeat.visualCue?.highlightTarget}
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            ) : currentStep.concept.subject === 'programming' ? (
-              <CodeExecutionVisual
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            ) : currentStep.concept.subject === 'mathematics' ? (
-              <MathStepsVisual
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            ) : (
-              <PhysicsCircuitVisual
-                showAnalogyMode={showAnalogyAlternative}
-                annotation={currentBeat.visualCue?.annotation || currentBeat.caption}
-              />
-            )}
+            {(() => {
+              const stepSub = currentStep?.concept?.subject;
+              const planSub = lessonPlan.subject;
+              const topicLower = `${lessonPlan.topic} ${currentStep?.concept?.name || ''}`.toLowerCase();
+
+              const activeSubject = (stepSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(stepSub))
+                ? stepSub
+                : (planSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(planSub))
+                ? planSub
+                : (topicLower.includes('dbms') || topicLower.includes('sql') || topicLower.includes('database'))
+                ? 'dbms'
+                : (topicLower.includes('biology') || topicLower.includes('cell') || topicLower.includes('respiration'))
+                ? 'biology'
+                : (topicLower.includes('math') || topicLower.includes('algebra') || topicLower.includes('calculus'))
+                ? 'mathematics'
+                : (topicLower.includes('physics') || topicLower.includes('circuit') || topicLower.includes('ohm') || topicLower.includes('voltage') || topicLower.includes('newton'))
+                ? 'physics'
+                : 'programming';
+
+              if (activeSubject === 'physics') {
+                return (
+                  <PhysicsCircuitVisual
+                    showAnalogyMode={showAnalogyAlternative}
+                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                  />
+                );
+              } else if (activeSubject === 'dbms') {
+                return (
+                  <DbmsRelationalVisual
+                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                  />
+                );
+              } else if (activeSubject === 'biology') {
+                return (
+                  <BiologyCellVisual
+                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                  />
+                );
+              } else if (activeSubject === 'mathematics') {
+                return (
+                  <MathStepsVisual
+                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                  />
+                );
+              } else {
+                return (
+                  <CodeExecutionVisual
+                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                  />
+                );
+              }
+            })()}
           </div>
 
           {/* Subtitles & Timed Caption Track */}
           {showCaptions && (
             <div className="p-3.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/15 text-center text-xs sm:text-sm text-[#1C1C1C] min-h-[44px] flex items-center justify-center font-serif italic shadow-sm">
-              <span className="text-[#777777] mr-2 font-mono text-[11px] not-italic">[{currentBeat.action}]</span>
-              <span>
-                {activeLanguage === 'hi' && currentBeat.speechHi
-                  ? currentBeat.speechHi
-                  : activeLanguage === 'te' && currentBeat.speechTe
-                  ? currentBeat.speechTe
-                  : activeLanguage === 'hinglish' && currentBeat.speechHinglish
-                  ? currentBeat.speechHinglish
-                  : currentBeat.speechEn}
-              </span>
+              <span className="text-[#777777] mr-2 font-mono text-[11px] not-italic">[{currentBeat?.action || 'EXPLAIN'}]</span>
+              <span>{activeSpeechText || currentBeat?.speechEn}</span>
             </div>
           )}
 
@@ -569,7 +440,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               </button>
 
               <button
-                onClick={() => setIsMuted((m) => !m)}
+                onClick={() => setIsMuted(!isMuted)}
                 className="p-2 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs transition-all"
                 title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
               >
@@ -579,14 +450,10 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
             {/* Stepper Dots Indicator */}
             <div className="flex items-center gap-1.5">
-              {currentStep.beats.map((_, idx) => (
+              {currentStep?.beats?.map((_, idx) => (
                 <button
                   key={idx}
-                  onClick={() => {
-                    speechService.stop();
-                    setCurrentBeatIdx(idx);
-                    setIsPlaying(true);
-                  }}
+                  onClick={() => advanceToNextBeat()}
                   className={`h-2 rounded-full transition-all ${
                     idx === currentBeatIdx
                       ? 'w-6 bg-[#1C1C1C]'
@@ -625,8 +492,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         </div>
       </div>
 
-      {/* Checkpoint Interactive Dialog (When pauseForInteraction is triggered) */}
-      {isAwaitingResponse && currentBeat.checkpoint && (
+      {/* Checkpoint Interactive Dialog (When pauseForInteraction or QUESTION phase is active) */}
+      {(lifecyclePhase === 'QUESTION' || lifecyclePhase === 'ADAPT' || (isAwaitingResponse && currentBeat?.checkpoint)) && currentBeat?.checkpoint && (
         <div className="fixed inset-0 z-50 bg-[#1C1C1C]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#FFFFFF] border border-[#1C1C1C]/20 max-w-xl w-full rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3">
@@ -635,12 +502,14 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                   <Sparkles className="w-4 h-4" />
                 </span>
                 <div>
-                  <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">Checkpoint: Understanding Check</h3>
-                  <p className="text-[11px] text-[#666666] font-sans">Concept: {currentStep.concept.name}</p>
+                  <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
+                    {lifecyclePhase === 'ADAPT' ? 'Adaptive Re-Explanation' : 'Checkpoint: Diagnostic Question'}
+                  </h3>
+                  <p className="text-[11px] text-[#666666] font-sans">Concept: {currentStep?.concept?.name}</p>
                 </div>
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15">
-                Purpose: {currentBeat.checkpoint.purpose}
+                Phase: {lifecyclePhase}
               </span>
             </div>
 
@@ -698,21 +567,26 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               </div>
             )}
 
-            {/* Submit Answer Button */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1C1C1C]/15">
-              <button
-                onClick={() => {
-                  const answer = selectedOption || freeTextAnswer;
-                  if (answer) {
-                    handleEvaluateCheckpoint(answer);
-                  }
-                }}
-                disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
-                className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
-              >
-                {isSubmittingAnswer ? 'Diagnosing...' : 'Submit Response'}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/15">
+              {lifecyclePhase === 'ADAPT' ? (
+                <button
+                  onClick={handleContinueFromMisconception}
+                  className="w-full py-2.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <span>Understood! Continue Lesson</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleCheckAnswer()}
+                  disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
+                  className="ml-auto px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
+                >
+                  {isSubmittingAnswer ? 'Diagnosing with AI...' : 'Submit Response'}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -730,8 +604,6 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <button
                 onClick={() => {
                   setIsAskModalOpen(false);
-                  setTeacherAnswer(null);
-                  setStudentQuery('');
                 }}
                 className="text-[#666666] hover:text-[#1C1C1C] p-1"
               >
@@ -740,7 +612,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
 
             <p className="text-xs text-[#666666] mb-3 font-sans">
-              Ask anything about <strong className="text-[#1C1C1C] font-serif">{currentStep.concept.name}</strong>. OutLearn answers and seamlessly resumes your lesson.
+              Ask anything about <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || lessonPlan.topic}</strong>. OutLearn answers and seamlessly resumes your lesson.
             </p>
 
             <div className="flex gap-2 mb-3">
@@ -749,11 +621,11 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 value={studentQuery || ''}
                 onChange={(e) => setStudentQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAskTeacher()}
-                placeholder="e.g., Why doesn't voltage change when resistance changes?"
+                placeholder="e.g., Why does this relationship hold true?"
                 className="flex-1 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
               />
               <button
-                onClick={handleAskTeacher}
+                onClick={() => handleAskTeacher()}
                 disabled={isQueryLoading || !studentQuery.trim()}
                 className="px-3.5 py-2 bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] rounded-xl text-xs font-bold flex items-center gap-1"
               >
@@ -769,7 +641,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                   {teacherAnswerMeta?.isLiveAi && (
                     <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300/60">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                      <span>Live {teacherAnswerMeta.modelUsed || 'Gemini 3.1'}</span>
+                      <span>Live {teacherAnswerMeta.modelUsed || 'Gemini'}</span>
                     </span>
                   )}
                 </div>
@@ -781,10 +653,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <button
                 onClick={() => {
                   setIsAskModalOpen(false);
-                  setTeacherAnswer(null);
-                  setStudentQuery('');
-                  setIsPlaying(true);
-                  if (currentBeat) deliverBeatSpeech(currentBeat);
+                  handleTogglePlay();
                 }}
                 className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-medium"
               >
@@ -851,7 +720,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 </span>
                 <div>
                   <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
-                    8 Pedagogical Determinations
+                    8 Pedagogical Determinations Blueprint
                   </h3>
                   <p className="text-[11px] text-[#666666] font-sans">
                     OutLearn's pedagogical reasoning for {lessonPlan.topic}
@@ -987,7 +856,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               Teaching Session Complete!
             </h3>
             <p className="text-xs text-[#555555] font-serif leading-relaxed mb-4">
-              All concepts have been mastered according to your personalized instruction. As requested in your instruction (<span className="italic">"test me at the end"</span>), your comprehensive summative assessment is ready.
+              All concepts have been taught and verified through OutLearn's AI interaction lifecycle. Ready for your comprehensive summative assessment test!
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
               <button
@@ -996,12 +865,6 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Begin Summative Assessment Test</span>
-              </button>
-              <button
-                onClick={() => setIsLessonCompleted(false)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-medium font-sans"
-              >
-                Review Concepts
               </button>
             </div>
           </div>
