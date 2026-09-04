@@ -12,6 +12,7 @@ import { DbmsRelationalVisual } from './visuals/DbmsRelationalVisual';
 import { BiologyCellVisual } from './visuals/BiologyCellVisual';
 import { CodeExecutionVisual } from './visuals/CodeExecutionVisual';
 import { MathStepsVisual } from './visuals/MathStepsVisual';
+import { D3InteractiveDiagram } from './visuals/D3InteractiveDiagram';
 import { useLessonOrchestrator, LifecyclePhase } from '../hooks/useLessonOrchestrator';
 import {
   Play,
@@ -103,6 +104,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   const [showCaptions, setShowCaptions] = useState(true);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
   const [isDeterminationsModalOpen, setIsDeterminationsModalOpen] = useState(false);
+  const [visualMode, setVisualMode] = useState<'d3' | 'standard'>('d3');
 
   // Lifecycle stage progression definition
   const lifecycleStages: { phase: LifecyclePhase; label: string; icon: any }[] = [
@@ -345,64 +347,110 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
         {/* Right Column: Visual Teaching Canvas & Interaction Zone */}
         <div className="lg:col-span-8 flex flex-col gap-3">
+          {/* Visual Canvas Mode Switcher Bar */}
+          <div className="flex items-center justify-between px-2 bg-[#FAF9F5] p-1 rounded-xl border border-[#1C1C1C]/15 text-xs font-mono">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setVisualMode('d3')}
+                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
+                  visualMode === 'd3'
+                    ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-sm'
+                    : 'text-[#666666] hover:text-[#1C1C1C] hover:bg-[#E6E3DB]'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>D3.js Dynamic Diagram</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-[#1C1C1C] font-bold">
+                  Interactive
+                </span>
+              </button>
+
+              <button
+                onClick={() => setVisualMode('standard')}
+                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
+                  visualMode === 'standard'
+                    ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-sm'
+                    : 'text-[#666666] hover:text-[#1C1C1C] hover:bg-[#E6E3DB]'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Subject Schematic</span>
+              </button>
+            </div>
+
+            <span className="hidden sm:inline text-[10px] text-[#777777] font-sans">
+              Vector SVG with real-time parameter dynamics
+            </span>
+          </div>
+
           {/* Visual Canvas Area */}
-          <div className="flex-1 min-h-[380px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm">
-            {/* Dynamic Subject Visual Rendering */}
-            {(() => {
-              const stepSub = currentStep?.concept?.subject;
-              const planSub = lessonPlan.subject;
-              const topicLower = `${lessonPlan.topic} ${currentStep?.concept?.name || ''}`.toLowerCase();
+          <div className="flex-1 min-h-[420px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm">
+            {visualMode === 'd3' ? (
+              <D3InteractiveDiagram
+                topic={lessonPlan.topic}
+                subject={currentStep?.concept?.subject || lessonPlan.subject}
+                conceptName={currentStep?.concept?.name}
+                highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+              />
+            ) : (
+              /* Dynamic Subject Visual Rendering */
+              (() => {
+                const stepSub = currentStep?.concept?.subject;
+                const planSub = lessonPlan.subject;
+                const topicLower = `${lessonPlan.topic} ${currentStep?.concept?.name || ''}`.toLowerCase();
 
-              const activeSubject = (stepSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(stepSub))
-                ? stepSub
-                : (planSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(planSub))
-                ? planSub
-                : (topicLower.includes('dbms') || topicLower.includes('sql') || topicLower.includes('database'))
-                ? 'dbms'
-                : (topicLower.includes('biology') || topicLower.includes('cell') || topicLower.includes('respiration'))
-                ? 'biology'
-                : (topicLower.includes('math') || topicLower.includes('algebra') || topicLower.includes('calculus'))
-                ? 'mathematics'
-                : (topicLower.includes('physics') || topicLower.includes('circuit') || topicLower.includes('ohm') || topicLower.includes('voltage') || topicLower.includes('newton'))
-                ? 'physics'
-                : 'programming';
+                const activeSubject = (stepSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(stepSub))
+                  ? stepSub
+                  : (planSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(planSub))
+                  ? planSub
+                  : (topicLower.includes('dbms') || topicLower.includes('sql') || topicLower.includes('database'))
+                  ? 'dbms'
+                  : (topicLower.includes('biology') || topicLower.includes('cell') || topicLower.includes('respiration'))
+                  ? 'biology'
+                  : (topicLower.includes('math') || topicLower.includes('algebra') || topicLower.includes('calculus'))
+                  ? 'mathematics'
+                  : (topicLower.includes('physics') || topicLower.includes('circuit') || topicLower.includes('ohm') || topicLower.includes('voltage') || topicLower.includes('newton'))
+                  ? 'physics'
+                  : 'programming';
 
-              if (activeSubject === 'physics') {
-                return (
-                  <PhysicsCircuitVisual
-                    showAnalogyMode={showAnalogyAlternative}
-                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                  />
-                );
-              } else if (activeSubject === 'dbms') {
-                return (
-                  <DbmsRelationalVisual
-                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                  />
-                );
-              } else if (activeSubject === 'biology') {
-                return (
-                  <BiologyCellVisual
-                    highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                  />
-                );
-              } else if (activeSubject === 'mathematics') {
-                return (
-                  <MathStepsVisual
-                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                  />
-                );
-              } else {
-                return (
-                  <CodeExecutionVisual
-                    annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                  />
-                );
-              }
-            })()}
+                if (activeSubject === 'physics') {
+                  return (
+                    <PhysicsCircuitVisual
+                      showAnalogyMode={showAnalogyAlternative}
+                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                    />
+                  );
+                } else if (activeSubject === 'dbms') {
+                  return (
+                    <DbmsRelationalVisual
+                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                    />
+                  );
+                } else if (activeSubject === 'biology') {
+                  return (
+                    <BiologyCellVisual
+                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                    />
+                  );
+                } else if (activeSubject === 'mathematics') {
+                  return (
+                    <MathStepsVisual
+                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                    />
+                  );
+                } else {
+                  return (
+                    <CodeExecutionVisual
+                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+                    />
+                  );
+                }
+              })()
+            )}
           </div>
 
           {/* Subtitles & Timed Caption Track */}

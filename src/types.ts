@@ -162,15 +162,31 @@ export interface LessonPlan {
   determinations?: TeacherDeterminations;
 }
 
+export type DesiredDepth = 'conceptual_overview' | 'standard_depth' | 'deep_technical_math';
+
+export interface StudentAuthInfo {
+  isLoggedIn: boolean;
+  googleSub?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+  authProvider?: string;
+  loginTimestamp?: number;
+}
+
 export interface LearnerProfile {
   id: string;
   name: string;
+  email?: string;
+  avatarUrl?: string;
+  authInfo?: StudentAuthInfo;
   educationalLevel: EducationalLevel;
   statedPriorKnowledge: string;
   learningObjective: string;
   preferredLanguage: LanguageCode;
   timeBudget: TimeBudget;
   teacherPersonality: TeacherPersonality;
+  desiredDepth: DesiredDepth;
   conceptMastery: Record<string, ConceptMasteryState>;
   recentMisconceptions: {
     conceptId: string;

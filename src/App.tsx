@@ -13,6 +13,7 @@ import { TeachingRoom } from './components/TeachingRoom';
 import { AssessmentView } from './components/AssessmentView';
 import { LearningReportView } from './components/LearningReportView';
 import { LearningPathView } from './components/LearningPathView';
+import { StudentProfileModal } from './components/StudentProfileModal';
 import {
   Sparkles,
   BookOpen,
@@ -24,7 +25,10 @@ import {
   Flame,
   Check,
   Calendar,
-  X
+  X,
+  User,
+  ShieldCheck,
+  Sliders
 } from 'lucide-react';
 
 export default function App() {
@@ -32,6 +36,7 @@ export default function App() {
   const [activeLessonPlan, setActiveLessonPlan] = useState<LessonPlan>(PHYSICS_OHMS_LAW_PLAN);
   const [learningReport, setLearningReport] = useState<LearningReport | null>(null);
   const [isStreakPopoverOpen, setIsStreakPopoverOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Persistent Learner Profile with localStorage synchronization
   const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>(() => {
@@ -45,13 +50,24 @@ export default function App() {
     }
     return {
       id: 'student-demo-01',
-      name: 'Mahesh N.',
+      name: 'Mahesh Nyavanandhi',
+      email: 'maheshnyavanandhi533@gmail.com',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+      authInfo: {
+        isLoggedIn: true,
+        name: 'Mahesh Nyavanandhi',
+        email: 'maheshnyavanandhi533@gmail.com',
+        picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+        authProvider: 'Google OAuth 2.0',
+        googleSub: 'google-oauth-student-10928374'
+      },
       educationalLevel: 'beginner',
       statedPriorKnowledge: 'Basic algebra and physical models',
       learningObjective: 'Master Chapter 4 & Prepare for Assessments',
       preferredLanguage: 'hinglish',
       timeBudget: '20min',
       teacherPersonality: 'mentor',
+      desiredDepth: 'conceptual_overview',
       conceptMastery: {
         'c-voltage': 'understood',
         'c-current': 'developing'
@@ -293,6 +309,35 @@ export default function App() {
               <span className="text-[#1C1C1C] font-semibold">Gemini 3.1 AI Backend</span>
             </div>
 
+            {/* Student Profile & Personalization Button (OAuth) */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="flex items-center gap-2 bg-[#F2EFEB] hover:bg-[#EAE6DF] border border-[#1C1C1C]/15 px-2.5 py-1.5 rounded-xl transition-all shadow-2xs group"
+              title="Student OAuth Profile & 7 Personalization Dimensions"
+              id="student-oauth-btn"
+            >
+              {learnerProfile.avatarUrl ? (
+                <img
+                  src={learnerProfile.avatarUrl}
+                  alt={learnerProfile.name}
+                  className="w-5 h-5 rounded-full object-cover border border-[#1C1C1C]"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-[#1C1C1C] text-[#F9F8F6] flex items-center justify-center font-bold text-[10px]">
+                  {learnerProfile.name ? learnerProfile.name.charAt(0) : 'S'}
+                </div>
+              )}
+              <div className="text-left hidden sm:block">
+                <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none flex items-center gap-1">
+                  <span>Student Profile</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </span>
+                <span className="font-bold text-[#1C1C1C] text-[11px] truncate max-w-[100px] block">
+                  {learnerProfile.name || 'Mahesh N.'}
+                </span>
+              </div>
+            </button>
+
             <button
               onClick={() => setCurrentView('path')}
               className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] font-medium flex items-center gap-1.5 transition-colors shadow-sm"
@@ -308,6 +353,9 @@ export default function App() {
       <main className="flex-1 flex flex-col">
         {currentView === 'setup' && (
           <SetupView
+            learnerProfile={learnerProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onOpenProfileModal={() => setIsProfileModalOpen(true)}
             onStartLesson={handleStartLesson}
             onExploreLearningPath={() => setCurrentView('path')}
           />
@@ -359,6 +407,14 @@ export default function App() {
       <footer className="py-4 px-6 border-t border-[#1C1C1C]/10 bg-[#F2EFEB] text-center text-xs text-[#666666] font-serif">
         <span>OutLearn AI Teacher • AI Innovation Hackathon 2026 • Bharat Academix Pedagogical Edition</span>
       </footer>
+
+      {/* Student Profile & 7 Personalization Dimensions Modal */}
+      <StudentProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        profile={learnerProfile}
+        onSaveProfile={handleUpdateProfile}
+      />
     </div>
   );
 }

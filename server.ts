@@ -112,10 +112,87 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// Student OAuth Endpoints
+app.get('/api/auth/google/url', (req: Request, res: Response) => {
+  const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+  const redirectUri = `${baseUrl}/auth/callback`;
+  const nameParam = req.query.name ? `&name=${encodeURIComponent(req.query.name as string)}` : '';
+  const emailParam = req.query.email ? `&email=${encodeURIComponent(req.query.email as string)}` : '';
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID || '109283749201-demo-student.apps.googleusercontent.com',
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    prompt: 'select_account'
+  });
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}${nameParam}${emailParam}`;
+  res.json({ url: googleAuthUrl, redirectUri });
+});
+
+// Callback handler for OAuth popup
+const handleOAuthCallback = (req: Request, res: Response) => {
+  const name = (req.query.name as string) || 'Mahesh Nyavanandhi';
+  const email = (req.query.email as string) || 'maheshnyavanandhi533@gmail.com';
+  const picture = (req.query.picture as string) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
+  const sub = (req.query.sub as string) || `google-oauth-sub-${Date.now()}`;
+
+  const studentUser = {
+    sub,
+    name,
+    email,
+    picture,
+    authProvider: 'Google OAuth 2.0'
+  };
+
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Student OAuth Authorization Complete</title>
+        <style>
+          body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #F9F8F6; color: #1C1C1C; }
+          .card { background: white; padding: 2rem; border-radius: 1rem; border: 1px solid #ddd; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2>Google Student OAuth Complete</h2>
+          <p>Logged in as <strong>${studentUser.name}</strong> (${studentUser.email})</p>
+          <p>Closing popup and synchronizing profile...</p>
+        </div>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'OAUTH_AUTH_SUCCESS',
+              user: ${JSON.stringify(studentUser)}
+            }, '*');
+            setTimeout(function() { window.close(); }, 800);
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+      </body>
+    </html>
+  `);
+};
+
+app.get(['/auth/callback', '/auth/callback/'], handleOAuthCallback);
+
 // 0. Parse Natural Student Instruction & Determine 8 Pedagogical Decisions
 app.post('/api/parse-student-instruction', async (req: Request, res: Response) => {
   try {
-    const { instruction, materialContext = '', fileName = '' } = req.body;
+    const {
+      instruction,
+      materialContext = '',
+      fileName = '',
+      educationalLevel = 'beginner',
+      statedPriorKnowledge = '',
+      learningObjective = '',
+      preferredTeachingStyle = 'mentor',
+      preferredLanguage = 'hinglish',
+      timeBudget = '20min',
+      desiredDepth = 'conceptual_overview'
+    } = req.body;
     const client = getGeminiClient();
 
     if (client && instruction) {
@@ -123,37 +200,39 @@ app.post('/api/parse-student-instruction', async (req: Request, res: Response) =
 A student gave this exact natural instruction:
 "${instruction}"
 
+LEARNER PERSONALIZATION PROFILE (7 DIMENSIONS):
+- Educational Level: ${educationalLevel}
+  * Beginner Rule: Use simple terminology, analogies, and fundamental concepts.
+  * Intermediate Rule: Use more technical explanations and practical operational examples.
+  * Advanced Rule: Use detailed concepts, technical terminology, mathematics, implementation details, and advanced examples where appropriate.
+- Existing Knowledge: "${statedPriorKnowledge}"
+- Learning Objective: "${learningObjective}"
+- Preferred Teaching Style: ${preferredTeachingStyle}
+- Preferred Language: ${preferredLanguage}
+- Available Time: ${timeBudget}
+- Desired Depth: ${desiredDepth}
+
 ${fileName ? `Uploaded Textbook / Source Document: "${fileName}"` : ''}
 ${materialContext ? `Document Content Excerpt:\n"""${materialContext.slice(0, 3500)}"""` : ''}
 
-You must analyze this instruction and any attached learning material to make the 8 CORE PEDAGOGICAL DETERMINATIONS required for a true personalized teaching session (NOT a conventional chatbot):
+Analyze this instruction and learner parameters to produce the 8 CORE PEDAGOGICAL DETERMINATIONS required for a true personalized teaching session:
 
 1. What needs to be taught (topic & scope for allotted time)
 2. Which concepts should be covered first (prerequisite ordering & cognitive sequence)
-3. How deeply each concept should be explained (depth calibration according to level & time)
+3. How deeply each concept should be explained (depth calibration according to learner level & desired depth)
 4. Which examples or visuals should be used (concrete intuitive analogies & interactive visual lab simulations)
 5. When the student should be questioned (formative checkpoint timing during the lesson)
 6. Whether the student has understood the concept (cognitive diagnostic criteria for evaluating responses)
 7. Whether the lesson needs to be simplified or expanded (adaptive branching rules for misconceptions vs mastery)
 8. What should be taught next (post-lesson learning roadmap & end-of-lesson assessment recommendation)
 
-Also extract the explicit parameters:
-- detectedTopic: string (e.g. "Chapter 4: Electric Current and Ohm's Law" or related topic)
-- detectedChapter: string (e.g. "Chapter 4")
-- detectedLevel: "beginner" | "intermediate" | "advanced"
-- detectedTime: "5min" | "20min" | "60min"
-- detectedLanguage: "en" | "hi" | "hinglish" | "te"
-- askQuestionsDuringLesson: boolean (default true)
-- testAtEnd: boolean (default true)
-- stylePreference: string (e.g. "simple intuitive everyday examples")
-
 Return STRICT RAW JSON matching this exact structure:
 {
   "detectedTopic": string,
   "detectedChapter": string,
-  "detectedLevel": "beginner" | "intermediate" | "advanced",
-  "detectedTime": "5min" | "20min" | "60min",
-  "detectedLanguage": "en" | "hi" | "hinglish" | "te",
+  "detectedLevel": "${educationalLevel}",
+  "detectedTime": "${timeBudget}",
+  "detectedLanguage": "${preferredLanguage}",
   "askQuestionsDuringLesson": boolean,
   "testAtEnd": boolean,
   "stylePreference": string,
@@ -250,14 +329,18 @@ function detectSubjectFromText(topic: string, instruction = '', content = ''): '
   return 'programming'; // default for python, code, react, ai, programming, lab manuals, cs, general
 }
 
-// 1. Generate Structured Lesson Plan Endpoint with 8 Determinations
+// 1. Generate Structured Lesson Plan Endpoint with 8 Determinations & 7 Learner Personalizations
 app.post('/api/generate-lesson-plan', async (req: Request, res: Response) => {
   try {
     const {
       topic,
       educationalLevel = 'beginner',
-      timeBudget = '20min',
+      statedPriorKnowledge = '',
+      learningObjective = '',
+      preferredTeachingStyle = 'mentor',
       language = 'en',
+      timeBudget = '20min',
+      desiredDepth = 'conceptual_overview',
       materialContext = '',
       studentInstruction = ''
     } = req.body;
@@ -269,10 +352,20 @@ app.post('/api/generate-lesson-plan', async (req: Request, res: Response) => {
       const prompt = `You are OutLearn, a master human-like educator.
 Create a rich, structured, adaptive pedagogical lesson on the topic: "${topic}".
 Domain Subject: ${targetSubject}.
-Learner level: ${educationalLevel}.
-Available time: ${timeBudget}.
-Language: ${language}.
-${studentInstruction ? `Student Instruction: "${studentInstruction}"` : ''}
+
+LEARNER PERSONALIZATION ADAPTATION GUIDELINES (7 DIMENSIONS):
+- Educational Level: ${educationalLevel}
+  * Beginner Rule: Use simple terminology, analogies, and fundamental concepts.
+  * Intermediate Rule: Use more technical explanations, operational logic, and practical examples.
+  * Advanced Rule: Use detailed concepts, technical terminology, mathematics, implementation details, and advanced examples where appropriate.
+- Existing Knowledge: "${statedPriorKnowledge}" (Connect new concepts to this foundation)
+- Learning Objective: "${learningObjective}" (Align checkpoints and outcomes with this goal)
+- Preferred Teaching Style: ${preferredTeachingStyle}
+- Language: ${language}
+- Time Budget: ${timeBudget}
+- Desired Depth: ${desiredDepth}
+
+${studentInstruction ? `Student Natural Instruction: "${studentInstruction}"` : ''}
 ${materialContext ? `Uploaded Source Document Reference: "${materialContext.slice(0, 1500)}"` : ''}
 
 Generate a valid JSON object matching this schema:

@@ -5,7 +5,8 @@ import {
   LanguageCode,
   TeacherPersonality,
   LessonPlan,
-  TeacherDeterminations
+  TeacherDeterminations,
+  LearnerProfile
 } from '../types';
 import {
   SUPPORTED_LANGUAGES,
@@ -33,24 +34,46 @@ import {
   Eye,
   CheckSquare,
   GitBranch,
-  Target
+  Target,
+  User,
+  ShieldCheck,
+  Brain
 } from 'lucide-react';
 
 interface SetupViewProps {
+  learnerProfile?: LearnerProfile;
+  onUpdateProfile?: (updated: LearnerProfile) => void;
+  onOpenProfileModal?: () => void;
   onStartLesson: (plan: LessonPlan) => void;
   onExploreLearningPath: () => void;
 }
 
-export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLearningPath }) => {
+export const SetupView: React.FC<SetupViewProps> = ({
+  learnerProfile,
+  onUpdateProfile,
+  onOpenProfileModal,
+  onStartLesson,
+  onExploreLearningPath
+}) => {
   const [mode, setMode] = useState<'topic' | 'upload'>('topic');
   const [topicInput, setTopicInput] = useState("Python & Core Programming Principles");
-  const [level, setLevel] = useState<EducationalLevel>('beginner');
-  const [timeBudget, setTimeBudget] = useState<TimeBudget>('20min');
-  const [language, setLanguage] = useState<LanguageCode>('hi');
-  const [personality, setPersonality] = useState<TeacherPersonality>('mentor');
+  const [level, setLevel] = useState<EducationalLevel>(learnerProfile?.educationalLevel || 'beginner');
+  const [timeBudget, setTimeBudget] = useState<TimeBudget>(learnerProfile?.timeBudget || '20min');
+  const [language, setLanguage] = useState<LanguageCode>(learnerProfile?.preferredLanguage || 'hi');
+  const [personality, setPersonality] = useState<TeacherPersonality>(learnerProfile?.teacherPersonality || 'mentor');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState<string>('');
   const [backendStatus, setBackendStatus] = useState<{ connected: boolean; model?: string }>({ connected: true, model: 'Gemini 3.1 Flash' });
+
+  // Sync state if profile prop changes
+  React.useEffect(() => {
+    if (learnerProfile) {
+      if (learnerProfile.educationalLevel) setLevel(learnerProfile.educationalLevel);
+      if (learnerProfile.timeBudget) setTimeBudget(learnerProfile.timeBudget);
+      if (learnerProfile.preferredLanguage) setLanguage(learnerProfile.preferredLanguage);
+      if (learnerProfile.teacherPersonality) setPersonality(learnerProfile.teacherPersonality);
+    }
+  }, [learnerProfile]);
 
   // Natural Instruction & 8 Determinations State
   const [studentInstruction, setStudentInstruction] = useState(
@@ -197,8 +220,12 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
         body: JSON.stringify({
           topic: effectiveTopic,
           educationalLevel: level,
-          timeBudget,
+          statedPriorKnowledge: learnerProfile?.statedPriorKnowledge || '',
+          learningObjective: learnerProfile?.learningObjective || '',
+          preferredTeachingStyle: personality,
           language,
+          timeBudget,
+          desiredDepth: learnerProfile?.desiredDepth || 'conceptual_overview',
           studentInstruction,
           materialContext: uploadedFileContent
         })
@@ -539,6 +566,95 @@ export const SetupView: React.FC<SetupViewProps> = ({ onStartLesson, onExploreLe
         <p className="mt-4 text-sm sm:text-base text-[#5A5A5A] font-serif italic leading-relaxed max-w-2xl mx-auto">
           An adaptive educator designed for deep mastery — teaching through synchronized speech, subject-aware interactive laboratories, and rigorous misconception diagnosis.
         </p>
+      </div>
+
+      {/* Student Personalization Profile Card (7 Dimensions & OAuth) */}
+      <div className="mb-8 p-5 sm:p-6 rounded-3xl bg-[#FAF9F5] border border-[#1C1C1C]/15 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#1C1C1C]/10">
+          <div className="flex items-center gap-3">
+            {learnerProfile?.avatarUrl ? (
+              <img
+                src={learnerProfile.avatarUrl}
+                alt={learnerProfile.name}
+                className="w-12 h-12 rounded-full border-2 border-[#1C1C1C] object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-[#1C1C1C] text-[#F9F8F6] flex items-center justify-center font-bold text-base">
+                {learnerProfile?.name ? learnerProfile.name.charAt(0) : 'S'}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-serif font-bold text-base text-[#1C1C1C]">
+                  Learner Profile: {learnerProfile?.name || 'Mahesh Nyavanandhi'}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-mono font-bold border border-emerald-300 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                  <span>Google OAuth Signed In</span>
+                </span>
+              </div>
+              <p className="text-xs text-[#666666] font-mono">
+                {learnerProfile?.email || 'maheshnyavanandhi533@gmail.com'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onOpenProfileModal}
+            className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-sm flex items-center gap-2 transition-all self-start md:self-auto font-sans"
+          >
+            <Sliders className="w-4 h-4 text-amber-400" />
+            <span>Customize 7 Personalization Dimensions</span>
+          </button>
+        </div>
+
+        {/* 7 Active Dimensions Badges */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center text-[11px] font-sans">
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">1. Level</span>
+            <span className="font-bold text-[#1C1C1C] capitalize">{learnerProfile?.educationalLevel || 'beginner'}</span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">2. Knowledge</span>
+            <span className="font-bold text-[#1C1C1C] truncate block" title={learnerProfile?.statedPriorKnowledge}>
+              {learnerProfile?.statedPriorKnowledge || 'Basic Algebra'}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">3. Objective</span>
+            <span className="font-bold text-[#1C1C1C] truncate block" title={learnerProfile?.learningObjective}>
+              {learnerProfile?.learningObjective || 'Master Core Exam'}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">4. Style</span>
+            <span className="font-bold text-[#1C1C1C] capitalize">{learnerProfile?.teacherPersonality || 'mentor'}</span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">5. Language</span>
+            <span className="font-bold text-[#1C1C1C] uppercase">{learnerProfile?.preferredLanguage || 'hinglish'}</span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">6. Time</span>
+            <span className="font-bold text-[#1C1C1C]">{learnerProfile?.timeBudget || '20min'}</span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">7. Depth</span>
+            <span className="font-bold text-[#1C1C1C] truncate block">
+              {learnerProfile?.desiredDepth === 'deep_technical_math'
+                ? 'Deep Math'
+                : learnerProfile?.desiredDepth === 'standard_depth'
+                ? 'Standard'
+                : 'Conceptual'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Exemplar Fast-Launch Cards (Matches Hackathon PDF Scenarios) */}
