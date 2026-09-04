@@ -14,6 +14,7 @@ import { CodeExecutionVisual } from './visuals/CodeExecutionVisual';
 import { MathStepsVisual } from './visuals/MathStepsVisual';
 import { D3InteractiveDiagram } from './visuals/D3InteractiveDiagram';
 import { useLessonOrchestrator, LifecyclePhase } from '../hooks/useLessonOrchestrator';
+import { VoiceMicButton } from './VoiceMicButton';
 import {
   Play,
   Pause,
@@ -240,15 +241,16 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         </div>
       </div>
 
-      {/* Main Split-Stage Arena */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-7xl mx-auto w-full">
-        {/* Left Column: AI Teacher Zone (Avatar + Teacher Persona + Speech status) */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
-          {/* Teacher Avatar Card */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col items-center justify-center">
+      {/* Main Split-Stage Arena: Clean 2-Column Grid */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+        {/* LEFT COLUMN: AI Avatar Studio & D3 Interactive Visual Canvas */}
+        <div className="lg:col-span-6 flex flex-col gap-4">
+          {/* AI Teacher Avatar Card */}
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col items-center justify-center relative">
             <TeacherAvatar
               personality={teacherPersonality}
               isSpeaking={isSpeaking}
+              speakingText={activeSpeechText || currentBeat?.speechEn}
               teacherMood={
                 lifecyclePhase === 'QUESTION'
                   ? 'listening'
@@ -261,22 +263,44 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               size="md"
             />
 
-            {/* Active Lifecycle Phase Indicator Badge */}
+            {/* Active Student-Friendly Teaching Phase Badge */}
             <div className="mt-2 text-center">
-              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 uppercase tracking-wider font-bold">
-                Phase: {lifecyclePhase}
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 uppercase tracking-wider font-bold inline-flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                <span>
+                  {lifecyclePhase === 'UNDERSTAND'
+                    ? 'Understanding Profile'
+                    : lifecyclePhase === 'PLAN'
+                    ? 'Structuring Lesson'
+                    : lifecyclePhase === 'EXPLAIN'
+                    ? 'Teaching Concept'
+                    : lifecyclePhase === 'QUESTION'
+                    ? 'Interactive Checkpoint'
+                    : 'Growth & Adaptation'}
+                </span>
               </span>
             </div>
 
-            {/* Personality Selector Dropdown */}
-            <div className="w-full mt-3 pt-3 border-t border-[#1C1C1C]/10">
-              <label className="text-[11px] font-mono text-[#666666] font-medium block mb-1">
+            {/* Subtitles & Timed Caption Track beneath Avatar */}
+            {showCaptions && (
+              <div className="w-full mt-3 p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15 text-center text-xs text-[#1C1C1C] min-h-[44px] flex items-center justify-center font-serif italic shadow-2xs gap-2">
+                <span className="text-amber-800 bg-amber-100/80 border border-amber-300/60 px-2 py-0.5 rounded font-mono text-[10px] not-italic shrink-0 font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>Subtitles</span>
+                </span>
+                <span className="truncate">{activeSpeechText || currentBeat?.speechEn || 'Listening and preparing lesson concepts...'}</span>
+              </div>
+            )}
+
+            {/* Teacher Persona Selector Dropdown */}
+            <div className="w-full mt-3 pt-3 border-t border-[#1C1C1C]/10 flex items-center justify-between gap-2">
+              <label className="text-[11px] font-mono text-[#666666] font-medium shrink-0">
                 Teacher Persona:
               </label>
               <select
                 value={teacherPersonality || 'mentor'}
                 onChange={(e) => setTeacherPersonality(e.target.value as TeacherPersonality)}
-                className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
+                className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-serif"
               >
                 {TEACHER_PERSONALITIES.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -287,176 +311,368 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
           </div>
 
-          {/* Ask Teacher Interruption Box */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-3.5 shadow-sm">
-            <button
-              onClick={() => {
-                setIsAskModalOpen(true);
-              }}
-              className="w-full py-2.5 px-3 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
-            >
-              <MessageCircleQuestion className="w-4 h-4 text-[#1C1C1C]" />
-              <span>Ask Teacher / Interrupt Lesson</span>
-            </button>
-            <p className="text-[10px] text-[#777777] text-center mt-1.5 font-sans">
-              Curious? Interrupt anytime — OutLearn maintains lesson context.
-            </p>
-          </div>
-
-          {/* Concept Navigation Stepper */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-3 text-xs shadow-sm">
-            <h4 className="text-[11px] uppercase font-mono font-bold text-[#1C1C1C] tracking-wider mb-2 flex items-center justify-between">
-              <span>Curriculum Steps</span>
-              <span className="text-[10px] text-[#777777] font-normal font-sans">Click to jump</span>
-            </h4>
-            <div className="space-y-1">
-              {steps.map((step, idx) => (
-                <button
-                  key={step.id || idx}
-                  onClick={() => handleJumpToStep(idx)}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
-                    idx === currentStepIdx
-                      ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-sm'
-                      : 'bg-[#F9F8F6] hover:bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10'
-                  }`}
-                >
-                  <span className="truncate">{idx + 1}. {step.concept.name}</span>
-                  {idx === currentStepIdx && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                </button>
-              ))}
+          {/* D3 Interactive Diagram & Concept Blueprint Visual Canvas */}
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col gap-3">
+            {/* Visual Header & Concept Summary */}
+            <div className="flex items-start justify-between gap-2 border-b border-[#1C1C1C]/10 pb-2.5">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#777777] block mb-0.5">
+                  Interactive Diagram
+                </span>
+                <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
+                  {currentStep?.concept?.name || effectivePlan.topic}
+                </h3>
+              </div>
+              {currentStep?.concept?.keyFormulas && currentStep.concept.keyFormulas.length > 0 && (
+                <div className="flex flex-wrap gap-1 justify-end max-w-[200px]">
+                  {currentStep.concept.keyFormulas.map((f, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] font-mono text-[10px]">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Current Concept Metadata & Key Formulas */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 text-xs shadow-sm">
-            <h4 className="text-[11px] uppercase font-mono font-bold text-[#1C1C1C] tracking-wider mb-2">
-              Concept Blueprint
-            </h4>
-            <p className="text-[#555555] text-[11px] leading-relaxed mb-2 font-serif">
-              {currentStep?.concept?.summary || 'Key principles and foundational intuition.'}
-            </p>
-            {currentStep?.concept?.keyFormulas && currentStep.concept.keyFormulas.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {currentStep.concept.keyFormulas.map((f, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] font-mono text-[10px]">
-                    {f}
-                  </span>
+            {/* D3 Diagram Stage */}
+            <div className="min-h-[320px] bg-[#FFFFFF] rounded-xl border border-[#1C1C1C]/10 overflow-hidden flex flex-col relative">
+              {/* Dynamic AI Orchestrator Lifecycle Banner overlay during UNDERSTAND or PLAN phases */}
+              {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN' || isOrchestratingLifecycle) && (
+                <div className="absolute top-2 left-2 right-2 z-20 p-2.5 rounded-xl bg-[#FFFFFF]/95 backdrop-blur-md border border-[#1C1C1C]/20 shadow-md">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                    <span className="text-[10px] font-mono font-bold text-[#1C1C1C] uppercase tracking-wider">
+                      Pedagogical Calibration ({lifecyclePhase} Phase)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#333333] font-serif leading-tight">
+                    {lifecyclePhase === 'UNDERSTAND' ? understandSummary || 'Calibrating learner profile and prior knowledge...' : planSummary || 'Structuring 8 pedagogical determinations and concept beats...'}
+                  </p>
+                </div>
+              )}
+
+              <D3InteractiveDiagram
+                topic={effectivePlan.topic}
+                subject={currentStep?.concept?.subject || effectivePlan.subject}
+                conceptName={currentStep?.concept?.name}
+                highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+              />
+            </div>
+
+            {/* Video Player Timeline & Controls Bar */}
+            <div className="p-2.5 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-2">
+              {/* Play/Pause & Replay Buttons */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleTogglePlay}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all text-xs shadow-2xs ${
+                    isPlaying
+                      ? 'bg-[#333333] hover:bg-[#222222] text-[#F9F8F6]'
+                      : 'bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6]'
+                  }`}
+                  title={isPlaying ? 'Pause Lesson' : 'Play Lesson'}
+                >
+                  {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{isPlaying ? 'Pause' : 'Teach'}</span>
+                </button>
+
+                <button
+                  onClick={handleReplayBeat}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs flex items-center gap-1 transition-all"
+                  title="Replay Current Concept Explanation"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span className="font-sans text-[11px]">Replay</span>
+                </button>
+
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="p-1.5 rounded-lg bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs transition-all"
+                  title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
+                >
+                  {isMuted ? <VolumeX className="w-3.5 h-3.5 text-[#DC2626]" /> : <Volume2 className="w-3.5 h-3.5 text-[#1C1C1C]" />}
+                </button>
+              </div>
+
+              {/* Stepper Dots Indicator */}
+              <div className="flex items-center gap-1">
+                {currentStep?.beats?.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => advanceToNextBeat()}
+                    className={`h-2 rounded-full transition-all ${
+                      idx === currentBeatIdx
+                        ? 'w-5 bg-[#1C1C1C]'
+                        : idx < currentBeatIdx
+                        ? 'w-2 bg-[#666666]'
+                        : 'w-2 bg-[#E2DED6] hover:bg-[#CFCABF]'
+                    }`}
+                    title={`Beat ${idx + 1}`}
+                  />
                 ))}
               </div>
-            )}
+
+              {/* Speed & Caption Toggles */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <button
+                  onClick={() => setShowCaptions((c) => !c)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                    showCaptions ? 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]' : 'bg-[#FFFFFF] border-[#1C1C1C]/15 text-[#666666] hover:text-[#1C1C1C]'
+                  }`}
+                >
+                  CC
+                </button>
+
+                <select
+                  value={speechRate ?? 1.0}
+                  onChange={(e) => setSpeechRate(Number(e.target.value))}
+                  className="bg-[#FFFFFF] border border-[#1C1C1C]/20 text-[#1C1C1C] text-[11px] rounded px-1.5 py-0.5 focus:outline-none font-sans"
+                >
+                  <option value={0.75}>0.75x</option>
+                  <option value={1.0}>1.0x</option>
+                  <option value={1.25}>1.25x</option>
+                  <option value={1.5}>1.5x</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Right Column: Visual Teaching Canvas & Interaction Zone */}
-        <div className="lg:col-span-8 flex flex-col gap-3">
-          {/* Visual Canvas Area */}
-          <div className="flex-1 min-h-[420px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm relative">
-            {/* Dynamic AI Orchestrator Lifecycle Banner overlay during UNDERSTAND or PLAN phases */}
-            {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN' || isOrchestratingLifecycle) && (
-              <div className="absolute top-3 left-3 right-3 z-20 p-3 rounded-xl bg-[#FFFFFF]/95 backdrop-blur-md border border-[#1C1C1C]/20 shadow-lg animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                  <span className="text-[11px] font-mono font-bold text-[#1C1C1C] uppercase tracking-wider">
-                    AI Pedagogical Orchestration ({lifecyclePhase} Phase)
-                  </span>
+        {/* RIGHT COLUMN: Interactive Teaching Chat Thread */}
+        <div className="lg:col-span-6 flex flex-col h-full">
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 shadow-sm p-4 flex flex-col h-full min-h-[620px]">
+            {/* Thread Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
+                    Interactive Teaching Thread
+                  </h3>
+                  <p className="text-[10px] text-[#777777] font-mono">
+                    Real-time dialogue & checkpoint stream
+                  </p>
                 </div>
-                <p className="text-xs text-[#333333] font-serif leading-relaxed">
-                  {lifecyclePhase === 'UNDERSTAND' ? understandSummary || 'Calibrating learner profile and prior knowledge...' : planSummary || 'Structuring 8 pedagogical determinations and concept beats...'}
-                </p>
               </div>
-            )}
 
-            <D3InteractiveDiagram
-              topic={effectivePlan.topic}
-              subject={currentStep?.concept?.subject || effectivePlan.subject}
-              conceptName={currentStep?.concept?.name}
-              highlightTarget={currentBeat?.visualCue?.highlightTarget}
-              annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-            />
-          </div>
-
-          {/* Subtitles & Timed Caption Track */}
-          {showCaptions && (
-            <div className="p-3.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/15 text-center text-xs sm:text-sm text-[#1C1C1C] min-h-[44px] flex items-center justify-center font-serif italic shadow-sm">
-              <span className="text-[#777777] mr-2 font-mono text-[11px] not-italic">[{currentBeat?.action || 'EXPLAIN'}]</span>
-              <span>{activeSpeechText || currentBeat?.speechEn}</span>
-            </div>
-          )}
-
-          {/* Video Player Timeline & Controls Bar */}
-          <div className="p-3 bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-            {/* Play/Pause & Replay Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleTogglePlay}
-                className={`p-2.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-                  isPlaying
-                    ? 'bg-[#333333] hover:bg-[#222222] text-[#F9F8F6]'
-                    : 'bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6]'
-                }`}
-                title={isPlaying ? 'Pause Lesson' : 'Play Lesson'}
-              >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                <span className="text-xs">{isPlaying ? 'Pause' : 'Teach'}</span>
-              </button>
-
-              <button
-                onClick={handleReplayBeat}
-                className="p-2 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs flex items-center gap-1 transition-all"
-                title="Replay Current Concept Explanation"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline font-sans">Replay</span>
-              </button>
-
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className="p-2 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs transition-all"
-                title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
-              >
-                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-[#DC2626]" /> : <Volume2 className="w-3.5 h-3.5 text-[#1C1C1C]" />}
-              </button>
+              {/* Concept Progression Pills */}
+              <div className="flex items-center gap-1 max-w-[200px] overflow-x-auto pb-0.5">
+                {steps.map((step, idx) => (
+                  <button
+                    key={step.id || idx}
+                    onClick={() => handleJumpToStep(idx)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-medium transition-all shrink-0 ${
+                      idx === currentStepIdx
+                        ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-2xs'
+                        : 'bg-[#F2EFEB] text-[#666666] hover:bg-[#E6E3DB]'
+                    }`}
+                    title={step.concept.name}
+                  >
+                    Step {idx + 1}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Stepper Dots Indicator */}
-            <div className="flex items-center gap-1.5">
-              {currentStep?.beats?.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => advanceToNextBeat()}
-                  className={`h-2 rounded-full transition-all ${
-                    idx === currentBeatIdx
-                      ? 'w-6 bg-[#1C1C1C]'
-                      : idx < currentBeatIdx
-                      ? 'w-2 bg-[#666666]'
-                      : 'w-2 bg-[#E2DED6] hover:bg-[#CFCABF]'
-                  }`}
-                  title={`Beat ${idx + 1}`}
+            {/* Conversation Stream Scroll Area */}
+            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[580px] min-h-[380px]">
+              {conversationHistory.length === 0 ? (
+                <div className="p-6 text-center text-[#888888] font-serif italic text-xs">
+                  Initiating lesson sequence with {TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Teacher'}...
+                </div>
+              ) : (
+                conversationHistory.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  const isSystem = msg.role === 'system';
+
+                  if (isSystem) {
+                    return (
+                      <div key={msg.id} className="text-center my-1.5">
+                        <span className="text-[10px] font-mono text-[#777777] bg-[#F2EFEB] px-2.5 py-1 rounded-full border border-[#1C1C1C]/10 inline-flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-600" />
+                          <span>{msg.content}</span>
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                    >
+                      {/* Avatar Icon */}
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold border ${
+                        isUser
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]'
+                      }`}>
+                        {isUser ? 'S' : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
+                      </div>
+
+                      {/* Chat Bubble */}
+                      <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs ${
+                        isUser
+                          ? 'bg-[#1C1C1C] text-[#F9F8F6] rounded-tr-xs shadow-2xs'
+                          : 'bg-[#FAF8F5] text-[#1C1C1C] border border-[#1C1C1C]/15 rounded-tl-xs shadow-2xs'
+                      }`}>
+                        <div className={`flex items-center justify-between gap-2 mb-1 font-mono text-[10px] ${isUser ? 'text-amber-200' : 'text-[#777777]'}`}>
+                          <span className="font-bold">{isUser ? 'Learner' : TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Teacher'}</span>
+                          <span>{msg.timestamp}</span>
+                        </div>
+                        <p className="font-serif leading-relaxed whitespace-pre-wrap text-[12px]">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {/* Embedded Interactive Checkpoint Card in Chat Stream */}
+              {(lifecyclePhase === 'QUESTION' || (isAwaitingResponse && currentBeat?.checkpoint)) && !activeMisconception && currentBeat?.checkpoint && (
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border-2 border-[#1C1C1C]/20 shadow-md my-2 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]/15 mb-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-serif font-bold text-[#1C1C1C]">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>Interactive Checkpoint</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300/60 font-bold">
+                      Diagnostic Question
+                    </span>
+                  </div>
+
+                  <div className="text-xs font-serif font-bold text-[#1C1C1C] mb-3">
+                    {activeLanguage === 'hi' && currentBeat.checkpoint.questionHindi
+                      ? currentBeat.checkpoint.questionHindi
+                      : activeLanguage === 'hinglish' && currentBeat.checkpoint.questionHinglish
+                      ? currentBeat.checkpoint.questionHinglish
+                      : currentBeat.checkpoint.question}
+                  </div>
+
+                  {/* Multiple Choice Options */}
+                  {currentBeat.checkpoint.options && currentBeat.checkpoint.options.length > 0 ? (
+                    <div className="space-y-1.5 mb-3">
+                      {currentBeat.checkpoint.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedOption(opt)}
+                          className={`w-full text-left px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between ${
+                            selectedOption === opt
+                              ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
+                              : 'bg-[#FFFFFF] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
+                          }`}
+                        >
+                          <span>{opt}</span>
+                          {selectedOption === opt && <CheckCircle2 className="w-3.5 h-3.5 text-[#F9F8F6] shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-3">
+                      <textarea
+                        value={freeTextAnswer || ''}
+                        onChange={(e) => setFreeTextAnswer(e.target.value)}
+                        placeholder="Type or speak your answer..."
+                        className="w-full h-20 bg-[#FFFFFF] border border-[#1C1C1C]/20 rounded-xl p-2.5 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/10">
+                    <VoiceMicButton
+                      language={activeLanguage}
+                      size="sm"
+                      label="Voice Answer"
+                      onTranscriptChange={(text) => setFreeTextAnswer(text)}
+                    />
+                    <button
+                      onClick={() => handleCheckAnswer()}
+                      disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all"
+                    >
+                      {isSubmittingAnswer ? 'Evaluating...' : 'Submit Response'}
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Embedded Growth & Adaptation Card in Chat Stream */}
+              {(lifecyclePhase === 'ADAPT' || activeMisconception) && activeMisconception && (
+                <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-300/80 shadow-md my-2 animate-in fade-in zoom-in-95 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1">
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Growth Insight • Micro-Correction</span>
+                    </span>
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-200/60 text-amber-950 font-bold">
+                      {activeMisconception.category || 'Intuition Trap'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-serif font-bold text-[#1C1C1C] text-xs mb-1">
+                      {activeMisconception.name}
+                    </h4>
+                    <p className="text-xs text-[#555555] font-sans leading-relaxed mb-2">
+                      {activeMisconception.diagnosis}
+                    </p>
+                    <p className="text-xs text-[#1C1C1C] font-serif leading-relaxed italic bg-[#FFFFFF] p-2.5 rounded-xl border border-amber-200/80">
+                      "{activeMisconception.speech}"
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={handleContinueFromMisconception}
+                      className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all"
+                    >
+                      <span>Understood! Resume Lesson</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Thread Interactive Input & Action Bar */}
+            <div className="pt-3 border-t border-[#1C1C1C]/15 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={studentQuery || ''}
+                  onChange={(e) => setStudentQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAskTeacher()}
+                  placeholder="Ask a question or type your answer..."
+                  className="flex-1 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-sans"
                 />
-              ))}
-            </div>
+                <VoiceMicButton
+                  language={activeLanguage}
+                  size="md"
+                  label=""
+                  onTranscriptChange={(text) => setStudentQuery(text)}
+                />
+                <button
+                  onClick={() => handleAskTeacher()}
+                  disabled={isQueryLoading || !studentQuery.trim()}
+                  className="px-3.5 py-2 bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] rounded-xl text-xs font-bold flex items-center gap-1 shadow-2xs transition-all"
+                  title="Ask teacher question"
+                >
+                  {isQueryLoading ? 'Thinking...' : <Send className="w-3.5 h-3.5" />}
+                </button>
+              </div>
 
-            {/* Speed & Caption Toggles */}
-            <div className="flex items-center gap-2 text-xs">
-              <button
-                onClick={() => setShowCaptions((c) => !c)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all border ${
-                  showCaptions ? 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]' : 'bg-[#F2EFEB] border-[#1C1C1C]/15 text-[#666666] hover:text-[#1C1C1C]'
-                }`}
-              >
-                CC
-              </button>
-
-              <select
-                value={speechRate ?? 1.0}
-                onChange={(e) => setSpeechRate(Number(e.target.value))}
-                className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2 py-1 focus:outline-none font-sans"
-              >
-                <option value={0.75}>0.75x</option>
-                <option value={1.0}>1.0x (Normal)</option>
-                <option value={1.25}>1.25x</option>
-                <option value={1.5}>1.5x</option>
-              </select>
+              {/* Quick Action Hints */}
+              <div className="flex items-center justify-between text-[10px] text-[#777777] font-mono px-1">
+                <span>Ask anything — OutLearn maintains full lesson context</span>
+                <button
+                  onClick={() => setIsAskModalOpen(true)}
+                  className="text-[#1C1C1C] hover:underline font-bold flex items-center gap-1"
+                >
+                  <MessageCircleQuestion className="w-3 h-3" />
+                  <span>Interrupt Lesson</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -511,11 +727,20 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="mb-4">
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-[#666666]">Speak or type your explanation:</span>
+                  <VoiceMicButton
+                    language={activeLanguage}
+                    size="sm"
+                    label="Dictate Answer"
+                    onTranscriptChange={(text) => setFreeTextAnswer(text)}
+                  />
+                </div>
                 <textarea
                   value={freeTextAnswer || ''}
                   onChange={(e) => setFreeTextAnswer(e.target.value)}
-                  placeholder="Type your explanation or response here..."
+                  placeholder="Type or speak your answer using the microphone..."
                   className="w-full h-24 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl p-3 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
                 />
               </div>
@@ -523,10 +748,18 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
             {/* Action Buttons */}
             <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/15">
+              <VoiceMicButton
+                language={activeLanguage}
+                size="sm"
+                label="Voice Response"
+                onTranscriptChange={(text) => {
+                  setFreeTextAnswer(text);
+                }}
+              />
               <button
                 onClick={() => handleCheckAnswer()}
                 disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
-                className="ml-auto px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
+                className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
               >
                 {isSubmittingAnswer ? 'Diagnosing with AI...' : 'Submit Response'}
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -668,8 +901,14 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 value={studentQuery || ''}
                 onChange={(e) => setStudentQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAskTeacher()}
-                placeholder="e.g., Why does this relationship hold true?"
+                placeholder="Type or speak your question..."
                 className="flex-1 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
+              />
+              <VoiceMicButton
+                language={activeLanguage}
+                size="md"
+                label=""
+                onTranscriptChange={(text) => setStudentQuery(text)}
               />
               <button
                 onClick={() => handleAskTeacher()}

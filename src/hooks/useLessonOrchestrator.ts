@@ -327,6 +327,7 @@ export function useLessonOrchestrator({
 
     speechService.speak(textToSpeak, activeLanguage, {
       rate: speechRate,
+      personality: teacherPersonality,
       onEnd: () => {
         if (beat.pauseForInteraction || beat.checkpoint) {
           setLifecyclePhase('QUESTION');

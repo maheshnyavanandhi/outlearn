@@ -78,7 +78,7 @@ async function callGemini(contents: string, isJson: boolean = false): Promise<{ 
     throw new Error('GEMINI_API_KEY is not configured in server environment');
   }
 
-  const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+  const candidateModels = ['gemini-3.6-flash', 'gemini-3.1-flash-lite'];
   let lastErr: any = null;
 
   for (const model of candidateModels) {
@@ -92,10 +92,10 @@ async function callGemini(contents: string, isJson: boolean = false): Promise<{ 
         return { text: response.text, modelUsed: model };
       }
     } catch (err: any) {
-      console.warn(`[OutLearn Server] Model ${model} failed, attempting next model:`, err?.message || err);
+      console.warn(`[OutLearn Server] Model ${model} unavailable, switching to next candidate:`, err?.message || err);
       lastErr = err;
-      // Brief pause before trying next model to handle transient rate limits/spikes
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      // Brief pause before trying next model
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 
@@ -109,7 +109,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     status: 'ok',
     hasGeminiKey: hasKey,
     backend: 'Node.js Express + Google GenAI',
-    defaultModel: 'gemini-3.8-flash',
+    defaultModel: 'gemini-3.6-flash',
     time: new Date().toISOString()
   });
 });
@@ -668,16 +668,27 @@ app.post('/api/generate-roadmap', async (req: Request, res: Response) => {
     const { topic = 'General Science', educationalLevel = 'beginner', learningObjective = '' } = req.body;
     const client = getGeminiClient();
 
+    const lowerTopic = (topic || '').toLowerCase();
+
     if (client) {
       const prompt = `You are OutLearn's master educational curriculum architect.
-Generate a structured, 6-stage sequential learning roadmap graph tailored specifically to the subject/topic: "${topic}".
+Generate a structured, 6 to 8-stage sequential learning roadmap graph tailored specifically to the subject/topic: "${topic}".
 Learner Educational Level: ${educationalLevel}
 Learning Objective: "${learningObjective}"
 
 Guidelines:
-- Create 6 distinct, logical learning stages that build progressively on prerequisites.
+- Create 6 to 8 distinct, logical learning stages that build progressively on prerequisites.
+- If the topic is "Machine Learning" or "AI", produce exactly these 8 stages:
+  1. Python Fundamentals
+  2. Mathematics for ML
+  3. Data Processing
+  4. Supervised Learning
+  5. Unsupervised Learning
+  6. Model Evaluation
+  7. Neural Networks
+  8. Advanced Machine Learning
 - For each stage, provide: title, level ("beginner" | "intermediate" | "advanced"), status ("mastered" | "understood" | "developing" | "unknown"), conceptsCount (e.g. 5 to 8), and a short 1-sentence description.
-- Stage 1 should be 'mastered', Stage 2 'understood', Stage 3 'developing' (current milestone), and Stages 4-6 'unknown'.
+- Stage 1 and 2 should be 'mastered', Stage 3 'understood', Stage 4 'developing' (current active milestone), and subsequent stages 'unknown'.
 
 Return STRICT RAW JSON matching this structure:
 {
@@ -701,6 +712,28 @@ Return STRICT RAW JSON matching this structure:
       if (parsed && parsed.stages && Array.isArray(parsed.stages)) {
         return res.json({ success: true, roadmap: parsed, isLiveAi: true, modelUsed });
       }
+    }
+
+    // Machine Learning custom fallback matching user specification
+    if (lowerTopic.includes('machine learning') || lowerTopic.includes('ml')) {
+      return res.json({
+        success: true,
+        roadmap: {
+          title: 'Machine Learning Masterclass Roadmap',
+          subject: 'programming',
+          description: 'Comprehensive 8-stage structured learning path from fundamentals to neural networks and advanced AI.',
+          stages: [
+            { id: 'ml-1', title: 'Python Fundamentals', level: 'beginner', status: 'mastered', conceptsCount: 6, description: 'Core Python syntax, primitives, functions, and scientific computing tools.' },
+            { id: 'ml-2', title: 'Mathematics for ML', level: 'beginner', status: 'mastered', conceptsCount: 8, description: 'Linear algebra, matrix transformations, multivariable calculus, and probability.' },
+            { id: 'ml-3', title: 'Data Processing', level: 'intermediate', status: 'understood', conceptsCount: 7, description: 'Data cleaning, feature scaling, normalization, and Pandas dataframe operations.' },
+            { id: 'ml-4', title: 'Supervised Learning', level: 'intermediate', status: 'developing', conceptsCount: 10, description: 'Linear/logistic regression, decision trees, random forests, and SVMs.' },
+            { id: 'ml-5', title: 'Unsupervised Learning', level: 'intermediate', status: 'unknown', conceptsCount: 5, description: 'K-Means clustering, hierarchical clustering, and PCA dimensionality reduction.' },
+            { id: 'ml-6', title: 'Model Evaluation', level: 'advanced', status: 'unknown', conceptsCount: 6, description: 'Cross-validation, ROC-AUC curves, confusion matrices, and loss function tuning.' },
+            { id: 'ml-7', title: 'Neural Networks', level: 'advanced', status: 'unknown', conceptsCount: 9, description: 'Perceptrons, backpropagation, activation functions, and PyTorch deep learning.' },
+            { id: 'ml-8', title: 'Advanced Machine Learning', level: 'advanced', status: 'unknown', conceptsCount: 8, description: 'Transformers, LLM architectures, reinforcement learning, and MLOps deployment.' }
+          ]
+        }
+      });
     }
 
     return res.json({
