@@ -10,10 +10,7 @@ import {
 } from '../types';
 import {
   SUPPORTED_LANGUAGES,
-  TEACHER_PERSONALITIES,
-  PHYSICS_OHMS_LAW_PLAN,
-  DBMS_RELATIONAL_ALGEBRA_PLAN,
-  BIOLOGY_CELL_PLAN
+  TEACHER_PERSONALITIES
 } from '../data/curriculumData';
 import {
   BookOpen,
@@ -56,7 +53,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
   onExploreLearningPath
 }) => {
   const [mode, setMode] = useState<'topic' | 'upload'>('topic');
-  const [topicInput, setTopicInput] = useState("Python & Core Programming Principles");
+  const [topicInput, setTopicInput] = useState("");
   const [level, setLevel] = useState<EducationalLevel>(learnerProfile?.educationalLevel || 'beginner');
   const [timeBudget, setTimeBudget] = useState<TimeBudget>(learnerProfile?.timeBudget || '20min');
   const [language, setLanguage] = useState<LanguageCode>(learnerProfile?.preferredLanguage || 'hi');
@@ -112,18 +109,6 @@ export const SetupView: React.FC<SetupViewProps> = ({
         setBackendStatus({ connected: false });
       });
   }, []);
-
-  // Quick-load exemplars
-  const handleLoadExemplar = (exemplar: LessonPlan) => {
-    onStartLesson({
-      ...exemplar,
-      language,
-      teacherPersonality: personality,
-      timeBudget,
-      educationalLevel: level,
-      determinations: exemplar.determinations || activeDeterminations || undefined
-    });
-  };
 
   // Analyze Student Natural Instruction via Real Backend
   const handleAnalyzeInstruction = async (customInstruction?: string) => {
@@ -199,19 +184,42 @@ export const SetupView: React.FC<SetupViewProps> = ({
     }
   };
 
-  // Generate Custom Lesson via Real Express & Gemini Backend
-  const handleGenerateCustomLesson = async () => {
-    const effectiveTopic = topicInput.trim() || 'General Science & Principles';
-    setIsGenerating(true);
-    setGenerationPhase('Connecting to OutLearn server (/api/generate-lesson-plan)...');
+  // Functional Generator: Generates a complete LessonPlan object from an arbitrary topic prompt string
+  const generateLessonPlanFromPrompt = async (
+    topicPrompt: string,
+    options?: {
+      level?: EducationalLevel;
+      timeBudget?: TimeBudget;
+      language?: LanguageCode;
+      personality?: TeacherPersonality;
+      studentInstruction?: string;
+      uploadedFileContent?: string;
+      uploadedFileName?: string;
+      activeDeterminations?: TeacherDeterminations | null;
+      learnerProfile?: LearnerProfile;
+    }
+  ): Promise<LessonPlan> => {
+    const effectiveTopic = topicPrompt.trim() || 'General Learning Topic';
+    const currentLevel = options?.level || level;
+    const currentTime = options?.timeBudget || timeBudget;
+    const currentLang = options?.language || language;
+    const currentPers = options?.personality || personality;
+    const currentInstr = options?.studentInstruction !== undefined ? options.studentInstruction : studentInstruction;
+    const currentFileContent = options?.uploadedFileContent !== undefined ? options.uploadedFileContent : uploadedFileContent;
+    const currentFileName = options?.uploadedFileName !== undefined ? options.uploadedFileName : uploadedFileName;
 
-    const timer1 = setTimeout(() => {
-      setGenerationPhase('Google Gemini 3.1 formulating 8 pedagogical determinations...');
-    }, 1200);
-
-    const timer2 = setTimeout(() => {
-      setGenerationPhase('Structuring diagnostic checkpoints & interactive laboratory bindings...');
-    }, 4500);
+    // Infer target subject from topic string prompt
+    const textForSubject = `${effectiveTopic} ${currentInstr} ${currentFileName || ''}`.toLowerCase();
+    let targetSubject: LessonPlan['subject'] = 'programming';
+    if (textForSubject.includes('dbms') || textForSubject.includes('sql') || textForSubject.includes('relational') || textForSubject.includes('database')) {
+      targetSubject = 'dbms';
+    } else if (textForSubject.includes('biology') || textForSubject.includes('cell') || textForSubject.includes('respiration') || textForSubject.includes('plant')) {
+      targetSubject = 'biology';
+    } else if (textForSubject.includes('math') || textForSubject.includes('algebra') || textForSubject.includes('calculus') || textForSubject.includes('equation')) {
+      targetSubject = 'mathematics';
+    } else if (textForSubject.includes('ohm') || textForSubject.includes('voltage') || textForSubject.includes('circuit') || textForSubject.includes('physics') || textForSubject.includes('newton') || textForSubject.includes('electricity')) {
+      targetSubject = 'physics';
+    }
 
     try {
       const res = await fetch('/api/generate-lesson-plan', {
@@ -219,115 +227,151 @@ export const SetupView: React.FC<SetupViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: effectiveTopic,
-          educationalLevel: level,
-          statedPriorKnowledge: learnerProfile?.statedPriorKnowledge || '',
-          learningObjective: learnerProfile?.learningObjective || '',
-          preferredTeachingStyle: personality,
-          language,
-          timeBudget,
-          desiredDepth: learnerProfile?.desiredDepth || 'conceptual_overview',
-          studentInstruction,
-          materialContext: uploadedFileContent
+          educationalLevel: currentLevel,
+          statedPriorKnowledge: options?.learnerProfile?.statedPriorKnowledge || '',
+          learningObjective: options?.learnerProfile?.learningObjective || '',
+          preferredTeachingStyle: currentPers,
+          language: currentLang,
+          timeBudget: currentTime,
+          desiredDepth: options?.learnerProfile?.desiredDepth || 'conceptual_overview',
+          studentInstruction: currentInstr,
+          materialContext: currentFileContent
         })
       });
 
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-
       const data = await res.json();
-      const plan = data.plan;
+      const plan = data?.plan;
 
-      // Infer subject domain accurately
-      const textForSubject = `${effectiveTopic} ${studentInstruction} ${uploadedFileName || ''}`.toLowerCase();
-      let targetSubject: LessonPlan['subject'] = plan.subject || 'programming';
-      if (textForSubject.includes('dbms') || textForSubject.includes('sql') || textForSubject.includes('relational') || textForSubject.includes('database')) {
-        targetSubject = 'dbms';
-      } else if (textForSubject.includes('biology') || textForSubject.includes('cell') || textForSubject.includes('respiration') || textForSubject.includes('plant')) {
-        targetSubject = 'biology';
-      } else if (textForSubject.includes('math') || textForSubject.includes('algebra') || textForSubject.includes('calculus') || textForSubject.includes('equation')) {
-        targetSubject = 'mathematics';
-      } else if (textForSubject.includes('ohm') || textForSubject.includes('voltage') || textForSubject.includes('circuit') || textForSubject.includes('physics') || textForSubject.includes('newton')) {
-        targetSubject = 'physics';
-      } else {
-        targetSubject = 'programming';
-      }
+      if (plan && plan.steps && plan.steps.length > 0) {
+        const mappedSteps = plan.steps.map((st: any, sIdx: number) => {
+          const stepId = st.id || `step-${sIdx + 1}`;
+          const conceptId = `c-${stepId}`;
 
-      // Map raw beats with complete fidelity including Telugu and determinations
-      const mappedSteps = (plan.steps && plan.steps.length > 0) ? plan.steps.map((st: any, sIdx: number) => {
-        const stepId = st.id || `step-${sIdx + 1}`;
-        const conceptId = `c-${stepId}`;
+          const beats = (st.beats && st.beats.length > 0) ? st.beats.map((b: any, bIdx: number) => {
+            const visualCue = b.visualCue || {
+              subject: targetSubject,
+              viewMode: targetSubject === 'biology' ? 'cell_explorer' : targetSubject === 'dbms' ? 'dbms_tables' : targetSubject === 'mathematics' ? 'balance_scale' : targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer'
+            };
 
-        const beats = (st.beats && st.beats.length > 0) ? st.beats.map((b: any, bIdx: number) => {
-          const visualCue = b.visualCue || {
-            subject: targetSubject,
-            viewMode: targetSubject === 'biology' ? 'cell_explorer' : targetSubject === 'dbms' ? 'dbms_tables' : targetSubject === 'mathematics' ? 'balance_scale' : targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer'
-          };
+            const checkpoint = b.checkpoint ? {
+              id: `cp-${stepId}-${bIdx}`,
+              type: 'mcq' as const,
+              purpose: 'diagnose' as const,
+              question: b.checkpoint.question,
+              options: b.checkpoint.options || ['Core concept holds', 'Directly decreases', 'Remains unchanged'],
+              correctAnswer: b.checkpoint.correctAnswer || (b.checkpoint.options ? b.checkpoint.options[0] : 'Core concept holds'),
+              hint: b.checkpoint.hint || 'Reflect on the foundational relationship discussed above.',
+              conceptId,
+              knownMisconceptions: (b.checkpoint.misconceptions || []).map((m: any) => ({
+                triggerPattern: m.trigger || '',
+                category: m.category || 'conceptual_misconception',
+                misconceptionName: m.diagnosis || 'Core Misconception',
+                diagnosedThought: m.diagnosis || 'Flawed intuitive assumption',
+                correctiveStrategy: 'analogy' as const,
+                correctiveSpeech: m.correctionSpeech || 'Let us re-examine this through an intuitive example.'
+              }))
+            } : undefined;
 
-          const checkpoint = b.checkpoint ? {
-            id: `cp-${stepId}-${bIdx}`,
-            type: 'mcq' as const,
-            purpose: 'diagnose' as const,
-            question: b.checkpoint.question,
-            options: b.checkpoint.options || ['Core concept holds', 'Directly decreases', 'Remains unchanged'],
-            correctAnswer: b.checkpoint.correctAnswer || (b.checkpoint.options ? b.checkpoint.options[0] : 'Core concept holds'),
-            hint: b.checkpoint.hint || 'Reflect on the foundational relationship discussed above.',
-            conceptId,
-            knownMisconceptions: (b.checkpoint.misconceptions || []).map((m: any) => ({
-              triggerPattern: m.trigger || '',
-              category: m.category || 'conceptual_misconception',
-              misconceptionName: m.diagnosis || 'Core Misconception',
-              diagnosedThought: m.diagnosis || 'Flawed intuitive assumption',
-              correctiveStrategy: 'analogy' as const,
-              correctiveSpeech: m.correctionSpeech || 'Let us re-examine this through an intuitive example.'
-            }))
-          } : undefined;
+            return {
+              id: b.id || `beat-${stepId}-${bIdx}`,
+              conceptId,
+              action: b.action || (checkpoint ? 'ASK_CONCEPTUAL' : 'EXPLAIN'),
+              speechEn: b.speechEn || `Let's focus on ${st.conceptName || effectiveTopic}.`,
+              speechHi: b.speechHi,
+              speechHinglish: b.speechHinglish,
+              speechTe: b.speechTe,
+              caption: b.caption || `Focus on ${st.conceptName || effectiveTopic}`,
+              visualCue,
+              pauseForInteraction: Boolean(b.pauseForInteraction || checkpoint),
+              checkpoint,
+              durationSec: b.durationSec || 12
+            };
+          }) : [
+            {
+              id: `beat-${stepId}-intro`,
+              conceptId,
+              action: 'INTRODUCE' as const,
+              speechEn: `Welcome to our session on ${st.conceptName || effectiveTopic}. Let us explore the core principles together!`,
+              speechHi: `${st.conceptName || effectiveTopic} के इस सत्र में आपका स्वागत है।`,
+              speechHinglish: `${st.conceptName || effectiveTopic} ke is session me aapka welcome!`,
+              speechTe: `${st.conceptName || effectiveTopic} కి స్వాగతం!`,
+              caption: `Introduction to ${st.conceptName || effectiveTopic}`,
+              visualCue: { subject: targetSubject, viewMode: targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer' },
+              pauseForInteraction: false,
+              durationSec: 10
+            }
+          ];
 
           return {
-            id: b.id || `beat-${stepId}-${bIdx}`,
-            conceptId,
-            action: b.action || (checkpoint ? 'ASK_CONCEPTUAL' : 'EXPLAIN'),
-            speechEn: b.speechEn || `Let's focus on ${st.conceptName || effectiveTopic}.`,
-            speechHi: b.speechHi,
-            speechHinglish: b.speechHinglish,
-            speechTe: b.speechTe,
-            caption: b.caption || `Focus on ${st.conceptName || effectiveTopic}`,
-            visualCue,
-            pauseForInteraction: Boolean(b.pauseForInteraction || checkpoint),
-            checkpoint,
-            durationSec: b.durationSec || 12
+            id: stepId,
+            concept: {
+              id: conceptId,
+              name: st.conceptName || `${effectiveTopic} Foundations`,
+              subject: targetSubject,
+              summary: st.summary || 'Fundamental conceptual framework',
+              difficulty: currentLevel,
+              prerequisites: [],
+              keyTerms: st.keyTerms || ['Definition', 'Application']
+            },
+            allocatedMinutes: st.allocatedMinutes || (currentTime === '5min' ? 2 : 6),
+            masteryState: 'unknown' as const,
+            beats
           };
-        }) : [
-          {
-            id: `beat-${stepId}-intro`,
-            conceptId,
-            action: 'INTRODUCE' as const,
-            speechEn: `Welcome to our session on ${st.conceptName || effectiveTopic}. Let us explore the core principles together!`,
-            speechHi: `${st.conceptName || effectiveTopic} के इस सत्र में आपका स्वागत है।`,
-            speechHinglish: `${st.conceptName || effectiveTopic} ke is session me aapka welcome!`,
-            speechTe: `${st.conceptName || effectiveTopic} కి స్వాగతం!`,
-            caption: `Introduction to ${st.conceptName || effectiveTopic}`,
-            visualCue: { subject: targetSubject, viewMode: targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer' },
-            pauseForInteraction: false,
-            durationSec: 10
-          }
-        ];
+        });
 
         return {
-          id: stepId,
-          concept: {
-            id: conceptId,
-            name: st.conceptName || `${effectiveTopic} Foundations`,
-            subject: targetSubject,
-            summary: st.summary || 'Fundamental conceptual framework',
-            difficulty: level,
-            prerequisites: [],
-            keyTerms: st.keyTerms || ['Definition', 'Application']
-          },
-          allocatedMinutes: st.allocatedMinutes || (timeBudget === '5min' ? 2 : 6),
-          masteryState: 'unknown' as const,
-          beats
+          id: `dyn-plan-${Date.now()}`,
+          topic: plan.topic || effectiveTopic,
+          subject: targetSubject,
+          educationalLevel: currentLevel,
+          timeBudget: currentTime,
+          totalMinutes: currentTime === '5min' ? 5 : currentTime === '20min' ? 20 : 60,
+          language: currentLang,
+          teacherPersonality: currentPers,
+          prerequisitesOverview: plan.prerequisites || ['Curiosity and core foundational knowledge'],
+          steps: mappedSteps,
+          sourceDocumentName: currentFileName || undefined,
+          ragGrounded: Boolean(currentFileName),
+          determinations: plan.determinations || activeDeterminations || {
+            whatNeedsToBeTaught: `Core building blocks of ${effectiveTopic} scoped for a ${currentTime} ${currentLevel} session.`,
+            conceptsOrderReasoning: `Sequenced from fundamental definitions to practical execution to manage cognitive load.`,
+            depthCalibration: `Calibrated for ${currentLevel} level: high conceptual clarity, interactive examples.`,
+            examplesAndVisuals: `Interactive step-by-step visual demonstrations and laboratory models.`,
+            questioningTiming: `Interactive checkpoint after each core concept to confirm mental model integrity.`,
+            understandingCriteria: `Evaluating causal explanations rather than superficial recall.`,
+            adaptationTriggers: `Branch to simplified visual analogy on misconception; advance on success.`,
+            nextStepsRecommendation: `Comprehensive assessment followed by progression to the next unit.`
+          }
         };
-      }) : [
+      }
+    } catch (err) {
+      console.warn('Dynamic generator network issue, creating client fallback LessonPlan for prompt:', effectiveTopic, err);
+    }
+
+    // Dynamic Fallback LessonPlan object for arbitrary prompt
+    return {
+      id: `dyn-fallback-${Date.now()}`,
+      topic: effectiveTopic,
+      subject: targetSubject,
+      educationalLevel: currentLevel,
+      timeBudget: currentTime,
+      totalMinutes: currentTime === '5min' ? 5 : currentTime === '20min' ? 20 : 60,
+      language: currentLang,
+      teacherPersonality: currentPers,
+      prerequisitesOverview: ['Foundational concept overview', 'Analytical intuition'],
+      sourceDocumentName: currentFileName || undefined,
+      ragGrounded: Boolean(currentFileName),
+      determinations: activeDeterminations || {
+        whatNeedsToBeTaught: `Core building blocks of ${effectiveTopic} scoped for a ${currentTime} ${currentLevel} session.`,
+        conceptsOrderReasoning: `Sequenced from fundamental definitions to practical execution to manage cognitive load.`,
+        depthCalibration: `Calibrated for ${currentLevel} level: high conceptual clarity, interactive examples.`,
+        examplesAndVisuals: `Interactive step-by-step visual demonstrations and laboratory models.`,
+        questioningTiming: `Interactive checkpoint after each core concept to confirm mental model integrity.`,
+        understandingCriteria: `Evaluating causal explanations rather than superficial recall.`,
+        adaptationTriggers: `Branch to simplified visual analogy on misconception; advance on success.`,
+        nextStepsRecommendation: `Comprehensive assessment followed by progression to the next unit.`
+      },
+      steps: [
         {
           id: 'step-1',
           concept: {
@@ -335,17 +379,17 @@ export const SetupView: React.FC<SetupViewProps> = ({
             name: `${effectiveTopic}: Core Foundations`,
             subject: targetSubject,
             summary: `Essential principles and introductory framework of ${effectiveTopic}.`,
-            difficulty: level,
+            difficulty: currentLevel,
             prerequisites: [],
-            keyTerms: ['Core Definition', 'Foundations', 'Execution']
+            keyTerms: ['Core Principle', 'Foundations', 'Execution']
           },
-          allocatedMinutes: timeBudget === '5min' ? 2 : 6,
-          masteryState: 'unknown' as const,
+          allocatedMinutes: currentTime === '5min' ? 2 : 6,
+          masteryState: 'unknown',
           beats: [
             {
               id: 'beat-1-intro',
               conceptId: 'c-step-1',
-              action: 'INTRODUCE' as const,
+              action: 'INTRODUCE',
               speechEn: `Welcome to our session on ${effectiveTopic}. Let us explore the core principles together!`,
               speechHi: `${effectiveTopic} के इस सत्र में आपका स्वागत है।`,
               speechHinglish: `${effectiveTopic} ke is session me aapka welcome!`,
@@ -361,7 +405,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             {
               id: 'beat-1-checkpoint',
               conceptId: 'c-step-1',
-              action: 'ASK_CONCEPTUAL' as const,
+              action: 'ASK_CONCEPTUAL',
               speechEn: `Before we advance, let us verify our understanding with a quick checkpoint question.`,
               speechHi: `आगे बढ़ने से पहले, आइए एक प्रश्न के साथ अपनी समझ की जांच करें।`,
               speechHinglish: `Next step par jaane se pehle, ek quick question check karte hain.`,
@@ -374,8 +418,8 @@ export const SetupView: React.FC<SetupViewProps> = ({
               pauseForInteraction: true,
               checkpoint: {
                 id: 'cp-1-1',
-                type: 'mcq' as const,
-                purpose: 'diagnose' as const,
+                type: 'mcq',
+                purpose: 'diagnose',
                 question: `In ${effectiveTopic}, how does the primary system state respond when core inputs are varied?`,
                 options: [
                   'The operational state responds directly and predictably to input variation',
@@ -388,10 +432,10 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 knownMisconceptions: [
                   {
                     triggerPattern: 'unchanged',
-                    category: 'conceptual_misconception' as const,
+                    category: 'conceptual_misconception',
                     misconceptionName: 'Invariant misconception',
                     diagnosedThought: 'Assuming output is disconnected from input variation',
-                    correctiveStrategy: 'analogy' as const,
+                    correctiveStrategy: 'analogy',
                     correctiveSpeech: 'Remember, changes in inputs directly drive resulting behavior.'
                   }
                 ]
@@ -400,154 +444,53 @@ export const SetupView: React.FC<SetupViewProps> = ({
             }
           ]
         }
-      ];
+      ]
+    };
+  };
 
-      const finalPlan: LessonPlan = {
-        id: `dyn-plan-${Date.now()}`,
-        topic: plan?.topic || effectiveTopic,
-        subject: targetSubject,
-        educationalLevel: level,
+  // Launch a lesson dynamically from any arbitrary string topic prompt
+  const handleLaunchTopicPrompt = async (promptString: string) => {
+    setTopicInput(promptString);
+    setIsGenerating(true);
+    setGenerationPhase(`Analyzing "${promptString}" and preparing your lesson plan...`);
+
+    const timer1 = setTimeout(() => {
+      setGenerationPhase('Formulating interactive visual models & explanations...');
+    }, 1200);
+
+    const timer2 = setTimeout(() => {
+      setGenerationPhase('Finalizing interactive session & exercises...');
+    }, 4500);
+
+    try {
+      const plan = await generateLessonPlanFromPrompt(promptString, {
+        level,
         timeBudget,
-        totalMinutes: timeBudget === '5min' ? 5 : timeBudget === '20min' ? 20 : 60,
         language,
-        teacherPersonality: personality,
-        prerequisitesOverview: (plan as any)?.prerequisites || plan?.prerequisitesOverview || ['Curiosity and core foundational knowledge'],
-        steps: mappedSteps,
-        sourceDocumentName: uploadedFileName || undefined,
-        ragGrounded: Boolean(uploadedFileName),
-        determinations: plan?.determinations || activeDeterminations || {
-          whatNeedsToBeTaught: `Core building blocks of ${effectiveTopic} scoped for a ${timeBudget} ${level} session.`,
-          conceptsOrderReasoning: `Sequenced from fundamental definitions to practical execution to manage cognitive load.`,
-          depthCalibration: `Calibrated for ${level} level: high conceptual clarity, interactive examples.`,
-          examplesAndVisuals: `Interactive step-by-step visual demonstrations and laboratory models.`,
-          questioningTiming: `Interactive checkpoint after each core concept to confirm mental model integrity.`,
-          understandingCriteria: `Evaluating causal explanations rather than superficial recall.`,
-          adaptationTriggers: `Branch to simplified visual analogy on misconception; advance on success.`,
-          nextStepsRecommendation: `Comprehensive assessment followed by progression to the next unit.`
-        }
-      };
+        personality,
+        studentInstruction,
+        uploadedFileContent,
+        uploadedFileName,
+        activeDeterminations,
+        learnerProfile
+      });
 
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       setIsGenerating(false);
-      onStartLesson(finalPlan);
+      onStartLesson(plan);
     } catch (err) {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      console.warn('Error during lesson generation, generating dynamic fallback plan for topic:', err);
       setIsGenerating(false);
-
-      const effectiveTopic = topicInput.trim() || (uploadedFileName ? uploadedFileName.replace(/\.[^/.]+$/, '') : 'Core Concepts');
-      const textForSubject = `${effectiveTopic} ${studentInstruction} ${uploadedFileName || ''}`.toLowerCase();
-      let targetSubject: LessonPlan['subject'] = 'programming';
-      if (textForSubject.includes('dbms') || textForSubject.includes('sql') || textForSubject.includes('relational') || textForSubject.includes('database')) {
-        targetSubject = 'dbms';
-      } else if (textForSubject.includes('biology') || textForSubject.includes('cell') || textForSubject.includes('respiration') || textForSubject.includes('plant')) {
-        targetSubject = 'biology';
-      } else if (textForSubject.includes('math') || textForSubject.includes('algebra') || textForSubject.includes('calculus') || textForSubject.includes('equation')) {
-        targetSubject = 'mathematics';
-      } else if (textForSubject.includes('ohm') || textForSubject.includes('voltage') || textForSubject.includes('circuit') || textForSubject.includes('physics') || textForSubject.includes('newton')) {
-        targetSubject = 'physics';
-      }
-
-      const fallbackPlan: LessonPlan = {
-        id: `dyn-fallback-${Date.now()}`,
-        topic: effectiveTopic,
-        subject: targetSubject,
-        educationalLevel: level,
-        timeBudget,
-        totalMinutes: timeBudget === '5min' ? 5 : timeBudget === '20min' ? 20 : 60,
-        language,
-        teacherPersonality: personality,
-        prerequisitesOverview: ['Foundational concept overview', 'Analytical intuition'],
-        sourceDocumentName: uploadedFileName || undefined,
-        ragGrounded: Boolean(uploadedFileName),
-        determinations: activeDeterminations || {
-          whatNeedsToBeTaught: `Core building blocks of ${effectiveTopic} scoped for a ${timeBudget} ${level} session.`,
-          conceptsOrderReasoning: `Sequenced from fundamental definitions to practical execution to manage cognitive load.`,
-          depthCalibration: `Calibrated for ${level} level: high conceptual clarity, interactive examples.`,
-          examplesAndVisuals: `Interactive step-by-step visual demonstrations and laboratory models.`,
-          questioningTiming: `Interactive checkpoint after each core concept to confirm mental model integrity.`,
-          understandingCriteria: `Evaluating causal explanations rather than superficial recall.`,
-          adaptationTriggers: `Branch to simplified visual analogy on misconception; advance on success.`,
-          nextStepsRecommendation: `Comprehensive assessment followed by progression to the next unit.`
-        },
-        steps: [
-          {
-            id: 'fb-step-1',
-            concept: {
-              id: 'c-fb-1',
-              name: `${effectiveTopic}: Core Foundations`,
-              subject: targetSubject,
-              summary: `Essential principles and introductory framework of ${effectiveTopic}.`,
-              difficulty: level,
-              prerequisites: [],
-              keyTerms: ['Core Principle', 'Foundations', 'Execution']
-            },
-            allocatedMinutes: timeBudget === '5min' ? 2 : 6,
-            masteryState: 'unknown',
-            beats: [
-              {
-                id: 'beat-fb-1-intro',
-                conceptId: 'c-fb-1',
-                action: 'INTRODUCE',
-                speechEn: `Welcome to our session on ${effectiveTopic}. Let us explore the core principles together!`,
-                speechHi: `${effectiveTopic} के इस सत्र में आपका स्वागत है।`,
-                speechHinglish: `${effectiveTopic} ke is session me aapka welcome!`,
-                speechTe: `${effectiveTopic} కి స్వాగతం!`,
-                caption: `Introduction to ${effectiveTopic}`,
-                visualCue: {
-                  subject: targetSubject,
-                  viewMode: targetSubject === 'biology' ? 'cell_explorer' : targetSubject === 'dbms' ? 'dbms_tables' : targetSubject === 'mathematics' ? 'balance_scale' : targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer'
-                },
-                pauseForInteraction: false,
-                durationSec: 10
-              },
-              {
-                id: 'beat-fb-1-checkpoint',
-                conceptId: 'c-fb-1',
-                action: 'ASK_CONCEPTUAL',
-                speechEn: `Before we advance, let us verify our understanding with a quick checkpoint question.`,
-                speechHi: `आगे बढ़ने से पहले, आइए एक प्रश्न के साथ अपनी समझ की जांच करें।`,
-                speechHinglish: `Next step par jaane se pehle, ek quick question check karte hain.`,
-                speechTe: `ముందుకు వెళ్ళే ముందు, ఒక చిన్న ప్రశ్నతో మన అవగాహనను పరీక్షించుకుందాం.`,
-                caption: `Formative Checkpoint: ${effectiveTopic}`,
-                visualCue: {
-                  subject: targetSubject,
-                  viewMode: targetSubject === 'biology' ? 'cell_explorer' : targetSubject === 'dbms' ? 'dbms_tables' : targetSubject === 'mathematics' ? 'balance_scale' : targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer'
-                },
-                pauseForInteraction: true,
-                checkpoint: {
-                  id: 'cp-fb-1',
-                  type: 'mcq',
-                  purpose: 'diagnose',
-                  question: `In ${effectiveTopic}, how does the primary system state respond when core inputs are varied?`,
-                  options: [
-                    'The operational state responds directly and predictably to input variation',
-                    'The operational state remains strictly unchanged',
-                    'The system immediately terminates execution'
-                  ],
-                  correctAnswer: 'The operational state responds directly and predictably to input variation',
-                  hint: `Reflect on the foundational relationships governing ${effectiveTopic}.`,
-                  conceptId: 'c-fb-1',
-                  knownMisconceptions: [
-                    {
-                      triggerPattern: 'unchanged',
-                      category: 'conceptual_misconception',
-                      misconceptionName: 'Invariant misconception',
-                      diagnosedThought: 'Assuming output is disconnected from input variation',
-                      correctiveStrategy: 'analogy',
-                      correctiveSpeech: 'Remember, changes in inputs directly drive resulting behavior.'
-                    }
-                  ]
-                },
-                durationSec: 10
-              }
-            ]
-          }
-        ]
-      };
-
-      onStartLesson(fallbackPlan);
+      console.error('Error generating lesson plan from prompt:', err);
     }
+  };
+
+  // Handle main custom lesson trigger button
+  const handleGenerateCustomLesson = async () => {
+    const effectiveTopic = topicInput.trim() || 'General Science & Principles';
+    await handleLaunchTopicPrompt(effectiveTopic);
   };
 
   return (
@@ -555,8 +498,8 @@ export const SetupView: React.FC<SetupViewProps> = ({
       {/* Hero Welcome Banner with Editorial Aesthetic */}
       <div className="text-center max-w-3xl mx-auto mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ECEAE4] border border-[#1C1C1C]/15 text-xs text-[#1C1C1C] mb-4 shadow-sm font-mono">
-          <span className="w-2 h-2 rounded-full bg-[#1C1C1C]" />
-          <span>AI Innovation Hackathon 2026 — Bharat Academix</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+          <span>Adaptive Personalization Studio</span>
         </div>
 
         <h1 className="text-3xl sm:text-5xl font-serif font-black text-[#1C1C1C] tracking-tight leading-tight">
@@ -604,7 +547,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-sm flex items-center gap-2 transition-all self-start md:self-auto font-sans"
           >
             <Sliders className="w-4 h-4 text-amber-400" />
-            <span>Customize 7 Personalization Dimensions</span>
+            <span>Customize Learning Profile</span>
           </button>
         </div>
 
@@ -653,99 +596,6 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 ? 'Standard'
                 : 'Conceptual'}
             </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Exemplar Fast-Launch Cards (Matches Hackathon PDF Scenarios) */}
-      <div className="mb-10">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs uppercase font-mono font-bold text-[#666666] tracking-widest">
-            Featured Teaching Scenarios (Assessment Exemplars)
-          </h2>
-          <button
-            onClick={onExploreLearningPath}
-            className="text-xs text-[#1C1C1C] hover:text-[#555555] flex items-center gap-1 font-medium transition-colors underline decoration-dotted underline-offset-4"
-          >
-            <span>View 8-Stage Machine Learning Roadmap</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Exemplar 1: Physics Chapter 4 Electricity (Exact PDF Scenario) */}
-          <div
-            onClick={() => handleLoadExemplar(PHYSICS_OHMS_LAW_PLAN)}
-            className="group cursor-pointer p-5 rounded-2xl bg-[#FFFFFF] hover:bg-[#FAF8F5] border border-[#1C1C1C]/15 hover:border-[#1C1C1C]/40 shadow-sm transition-all"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="p-2 rounded-xl bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10">
-                <Zap className="w-4 h-4 text-[#D97706]" />
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/10">
-                PDF User Scenario
-              </span>
-            </div>
-            <h3 className="font-serif font-bold text-[#1C1C1C] text-base group-hover:text-[#000000] transition-colors">
-              Physics: Chapter 4 Electricity & Ohm's Law
-            </h3>
-            <p className="text-xs text-[#666666] mt-1.5 line-clamp-2 leading-relaxed font-sans">
-              "Teach me Chapter 4 in 20 min in Hinglish. Ask questions and test me."
-            </p>
-            <div className="mt-4 flex items-center justify-between text-[11px] text-[#777777] pt-2.5 border-t border-[#1C1C1C]/10 font-mono">
-              <span>Interactive circuit simulation</span>
-              <span className="text-[#1C1C1C] font-bold group-hover:translate-x-0.5 transition-transform">Launch →</span>
-            </div>
-          </div>
-
-          {/* Exemplar 2: DBMS Relational Algebra (Video Demo Scenario) */}
-          <div
-            onClick={() => handleLoadExemplar(DBMS_RELATIONAL_ALGEBRA_PLAN)}
-            className="group cursor-pointer p-5 rounded-2xl bg-[#FFFFFF] hover:bg-[#FAF8F5] border border-[#1C1C1C]/15 hover:border-[#1C1C1C]/40 shadow-sm transition-all"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="p-2 rounded-xl bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10">
-                <Database className="w-4 h-4 text-[#2563EB]" />
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/10">
-                Video Demo Topic
-              </span>
-            </div>
-            <h3 className="font-serif font-bold text-[#1C1C1C] text-base group-hover:text-[#000000] transition-colors">
-              DBMS: Selection (σ) vs Projection (π)
-            </h3>
-            <p className="text-xs text-[#666666] mt-1.5 line-clamp-2 leading-relaxed font-sans">
-              Horizontal row slicing vs vertical column extraction with animated tables.
-            </p>
-            <div className="mt-4 flex items-center justify-between text-[11px] text-[#777777] pt-2.5 border-t border-[#1C1C1C]/10 font-mono">
-              <span>Interactive table transformations</span>
-              <span className="text-[#1C1C1C] font-bold group-hover:translate-x-0.5 transition-transform">Launch →</span>
-            </div>
-          </div>
-
-          {/* Exemplar 3: Biology Cell Structure */}
-          <div
-            onClick={() => handleLoadExemplar(BIOLOGY_CELL_PLAN)}
-            className="group cursor-pointer p-5 rounded-2xl bg-[#FFFFFF] hover:bg-[#FAF8F5] border border-[#1C1C1C]/15 hover:border-[#1C1C1C]/40 shadow-sm transition-all"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="p-2 rounded-xl bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10">
-                <Microscope className="w-4 h-4 text-[#059669]" />
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/10">
-                Biology
-              </span>
-            </div>
-            <h3 className="font-serif font-bold text-[#1C1C1C] text-base group-hover:text-[#000000] transition-colors">
-              Biology: Cell Membrane vs Cell Wall
-            </h3>
-            <p className="text-xs text-[#666666] mt-1.5 line-clamp-2 leading-relaxed font-sans">
-              Structure-to-function reasoning and why plant cells have cellulose walls.
-            </p>
-            <div className="mt-4 flex items-center justify-between text-[11px] text-[#777777] pt-2.5 border-t border-[#1C1C1C]/10 font-mono">
-              <span>Interactive organelle inspection</span>
-              <span className="text-[#1C1C1C] font-bold group-hover:translate-x-0.5 transition-transform">Launch →</span>
-            </div>
           </div>
         </div>
       </div>

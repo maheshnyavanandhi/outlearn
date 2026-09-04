@@ -115,16 +115,23 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
   const [isAnimating, setIsAnimating] = useState(true);
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<string | null>(null);
 
+  const simulationRef = useRef<d3.Simulation<any, undefined> | null>(null);
+
   // Main D3 Rendering Engine
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
 
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+      simulationRef.current = null;
+    }
+
     const width = containerRef.current.clientWidth || 600;
     const height = containerRef.current.clientHeight || 340;
 
-    // Clear previous SVG contents
+    // Clear previous SVG contents cleanly
     const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    svg.selectAll('*').interrupt().remove();
     svg.attr('viewBox', `0 0 ${width} ${height}`);
 
     if (activeSubject === 'physics') {
@@ -649,8 +656,10 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
 
     const simulation = d3.forceSimulation(nodes as any)
       .force('link', d3.forceLink(links as any).id((d: any) => d.id).distance(120))
-      .force('charge', d3.forceManyBody().strength(-350))
+      .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2));
+
+    simulationRef.current = simulation;
 
     const g = svg.append('g');
 
@@ -709,6 +718,11 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
     });
 
     simulation.on('tick', () => {
+      node.each((d: any) => {
+        d.x = Math.max(50, Math.min(width - 50, d.x));
+        d.y = Math.max(30, Math.min(height - 30, d.y));
+      });
+
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -1084,8 +1098,10 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
 
     const simulation = d3.forceSimulation(derivedNodes as any)
       .force('link', d3.forceLink(links as any).id((d: any) => d.id).distance(110))
-      .force('charge', d3.forceManyBody().strength(-300))
+      .force('charge', d3.forceManyBody().strength(-280))
       .force('center', d3.forceCenter(width / 2, height / 2));
+
+    simulationRef.current = simulation;
 
     const g = svg.append('g');
 
@@ -1127,6 +1143,11 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
     });
 
     simulation.on('tick', () => {
+      node.each((d: any) => {
+        d.x = Math.max(70, Math.min(width - 70, d.x));
+        d.y = Math.max(30, Math.min(height - 30, d.y));
+      });
+
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -1147,7 +1168,7 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
           </div>
           <div>
             <h3 className="text-xs font-serif font-bold text-[#1C1C1C] flex items-center gap-1.5">
-              <span>Interactive D3.js Diagram</span>
+              <span>Interactive Visual Model</span>
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-900 font-mono font-bold uppercase">
                 {activeSubject}
               </span>

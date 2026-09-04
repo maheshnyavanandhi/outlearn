@@ -14,6 +14,8 @@ import { AssessmentView } from './components/AssessmentView';
 import { LearningReportView } from './components/LearningReportView';
 import { LearningPathView } from './components/LearningPathView';
 import { StudentProfileModal } from './components/StudentProfileModal';
+import { LoginView } from './components/LoginView';
+import { OnboardingView } from './components/OnboardingView';
 import {
   Sparkles,
   BookOpen,
@@ -28,10 +30,23 @@ import {
   X,
   User,
   ShieldCheck,
-  Sliders
+  Sliders,
+  LogOut
 } from 'lucide-react';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
+    try {
+      const email = localStorage.getItem('outlearn_current_user_email');
+      if (email) {
+        return localStorage.getItem(`outlearn_onboarded_${email}`) === 'true';
+      }
+    } catch (e) {
+      console.warn('Failed to read onboarding status', e);
+    }
+    return false;
+  });
   const [currentView, setCurrentView] = useState<'setup' | 'teaching' | 'assessment' | 'report' | 'path'>('setup');
   const [activeLessonPlan, setActiveLessonPlan] = useState<LessonPlan>(PHYSICS_OHMS_LAW_PLAN);
   const [learningReport, setLearningReport] = useState<LearningReport | null>(null);
@@ -112,10 +127,194 @@ export default function App() {
     setCurrentView('report');
   };
 
+  // Handler: Selecting a stage from the dynamic Learning Path Roadmap
+  const handleSelectPathStage = async (stageTitle: string, stageDetails?: any) => {
+    // Determine subject from stage or active plan
+    const topicText = `${stageTitle} ${activeLessonPlan?.topic || ''}`.toLowerCase();
+    let targetSubject: LessonPlan['subject'] = 'general';
+    if (topicText.includes('physics') || topicText.includes('voltage') || topicText.includes('ohm') || topicText.includes('circuit') || topicText.includes('electricity')) {
+      targetSubject = 'physics';
+    } else if (topicText.includes('dbms') || topicText.includes('sql') || topicText.includes('relational') || topicText.includes('database')) {
+      targetSubject = 'dbms';
+    } else if (topicText.includes('biology') || topicText.includes('cell') || topicText.includes('organelle') || topicText.includes('plant')) {
+      targetSubject = 'biology';
+    } else if (topicText.includes('python') || topicText.includes('pandas') || topicText.includes('machine learning') || topicText.includes('code')) {
+      targetSubject = 'programming';
+    }
+
+    try {
+      const res = await fetch('/api/generate-lesson-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: stageTitle,
+          educationalLevel: learnerProfile.educationalLevel || 'beginner',
+          statedPriorKnowledge: learnerProfile.statedPriorKnowledge || '',
+          learningObjective: `Master ${stageTitle}`,
+          preferredLanguage: learnerProfile.preferredLanguage || 'hinglish',
+          teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+          timeBudget: learnerProfile.timeBudget || '20min'
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.lessonPlan) {
+        setActiveLessonPlan(data.lessonPlan);
+        setCurrentView('teaching');
+        return;
+      }
+    } catch (e) {
+      console.warn('Backend lesson generation failed for stage, fallback to dynamic plan', e);
+    }
+
+    // Dynamic lesson plan fallback
+    const dynamicPlan: LessonPlan = {
+      id: `stage-plan-${Date.now()}`,
+      topic: stageTitle,
+      subject: targetSubject,
+      educationalLevel: learnerProfile.educationalLevel || 'beginner',
+      timeBudget: learnerProfile.timeBudget || '20min',
+      totalMinutes: 20,
+      language: learnerProfile.preferredLanguage || 'hinglish',
+      teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+      ragGrounded: true,
+      prerequisitesOverview: ['Foundational concepts and intuitive models.'],
+      determinations: {
+        whatNeedsToBeTaught: `Stage Module: ${stageTitle}. Scoped for deep intuitive understanding in 20 minutes.`,
+        conceptsOrderReasoning: 'Sequenced from primary definition to operational execution.',
+        depthCalibration: 'Calibrated for practical understanding and problem solving.',
+        examplesAndVisuals: 'Interactive D3 visual diagrams and real-world analogies.',
+        questioningTiming: 'Formative checkpoints scheduled at concept boundaries.',
+        understandingCriteria: 'Evaluates causal understanding and problem-solving ability.',
+        adaptationTriggers: 'Adaptive branching with corrective analogies if misconceptions arise.',
+        nextStepsRecommendation: 'Summative assessment evaluation upon completion.'
+      },
+      steps: [
+        {
+          id: 'step-1',
+          concept: {
+            id: `concept-${Date.now()}`,
+            name: stageTitle,
+            subject: targetSubject,
+            summary: stageDetails?.description || `Mastery module covering ${stageTitle}.`,
+            difficulty: learnerProfile.educationalLevel || 'beginner',
+            prerequisites: []
+          },
+          allocatedMinutes: 20,
+          masteryState: 'unknown',
+          beats: [
+            {
+              id: 'beat-1',
+              conceptId: `concept-${Date.now()}`,
+              action: 'INTRODUCE',
+              speechEn: `Welcome to our session on ${stageTitle}. Today we will master these core principles step-by-step.`,
+              speechHi: `${stageTitle} के इस पाठ में आपका स्वागत है। आज हम इसे चरण-दर-चरण समझेंगे।`,
+              speechHinglish: `Welcome! Aaj hum ${stageTitle} ko step-by-step master karenge with practical examples.`,
+              caption: `Introduction to ${stageTitle}`,
+              visualCue: {
+                subject: targetSubject,
+                viewMode: 'concept_map',
+                annotation: `Core Principle: ${stageTitle}`
+              },
+              durationSec: 10
+            },
+            {
+              id: 'beat-2-checkpoint',
+              conceptId: `concept-${Date.now()}`,
+              action: 'ASK_CONCEPTUAL',
+              speechEn: `What is the primary governing principle of ${stageTitle}?`,
+              speechHi: `${stageTitle} का मुख्य सिद्धांत क्या है?`,
+              speechHinglish: `${stageTitle} ka main governing principle kya hai?`,
+              caption: `Checkpoint: Core mechanism of ${stageTitle}`,
+              visualCue: {
+                subject: targetSubject,
+                viewMode: 'concept_map',
+                annotation: `Evaluation: ${stageTitle}`
+              },
+              pauseForInteraction: true,
+              checkpoint: {
+                id: `cp-${Date.now()}`,
+                type: 'conceptual',
+                purpose: 'gate_progression',
+                conceptId: `concept-${Date.now()}`,
+                question: `Which statement best describes the fundamental principle of ${stageTitle}?`,
+                options: [
+                  `It establishes cause-and-effect relationships governed by core physical/system laws`,
+                  `It is entirely random and unpredictable without underlying patterns`,
+                  `It only applies in hypothetical theoretical models without practical application`,
+                  `It reverses standard logical operations`
+                ],
+                correctAnswer: `It establishes cause-and-effect relationships governed by core physical/system laws`,
+                hint: `Think about how the primary mechanisms interact in real systems.`,
+                knownMisconceptions: [
+                  {
+                    triggerPattern: 'random',
+                    category: 'conceptual_misconception',
+                    misconceptionName: 'Principle Misunderstanding',
+                    diagnosedThought: 'Student thought core principles operate randomly without systematic causality.',
+                    correctiveStrategy: 'analogy',
+                    correctiveSpeech: 'Actually, physical and computational systems follow strict causal rules that can be modeled and predicted!'
+                  }
+                ]
+              },
+              durationSec: 8
+            }
+          ]
+        }
+      ]
+    };
+
+    setActiveLessonPlan(dynamicPlan);
+    setCurrentView('teaching');
+  };
+
   // Count mastered concepts
   const masteredConceptsCount = Object.values(learnerProfile.conceptMastery).filter(
     (s) => s === 'mastered' || s === 'understood'
   ).length;
+
+  // Render Login/Sign In view first if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <LoginView
+        onLoginSuccess={(profileData) => {
+          const userEmail = profileData.authInfo?.email || profileData.email || 'user';
+          try {
+            localStorage.setItem('outlearn_current_user_email', userEmail);
+          } catch (e) {
+            console.warn('Failed to save email to storage', e);
+          }
+          const isOnboarded = localStorage.getItem(`outlearn_onboarded_${userEmail}`) === 'true';
+
+          const updatedProfile = {
+            ...learnerProfile,
+            ...profileData
+          };
+          handleUpdateProfile(updatedProfile);
+          setIsAuthenticated(true);
+          setHasCompletedOnboarding(isOnboarded);
+        }}
+      />
+    );
+  }
+
+  // Render OnboardingView for new users after their login
+  if (!hasCompletedOnboarding) {
+    return (
+      <OnboardingView
+        learnerProfile={learnerProfile}
+        onCompleteOnboarding={(updatedProfile) => {
+          const userEmail = updatedProfile.authInfo?.email || updatedProfile.email || 'user';
+          try {
+            localStorage.setItem(`outlearn_onboarded_${userEmail}`, 'true');
+          } catch (e) {
+            console.warn('Failed to save onboarding completion', e);
+          }
+          handleUpdateProfile(updatedProfile);
+          setHasCompletedOnboarding(true);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-[#1C1C1C] flex flex-col selection:bg-[#1C1C1C] selection:text-[#F9F8F6]" id="outlearn-app-root">
@@ -158,7 +357,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[10px] text-[#666666] font-serif italic hidden sm:block">
-                AI Innovation Hackathon 2026 — Bharat Academix Edition
+                Adaptive AI Educator & Masterclass Studio
               </p>
             </div>
           </div>
@@ -193,7 +392,17 @@ export default function App() {
                   : 'text-[#5A5A5A] hover:text-[#1C1C1C]'
               }`}
             >
-              Learning Path (ML)
+              {(() => {
+                const topic = activeLessonPlan?.topic || learnerProfile.learningObjective || '';
+                const lower = topic.toLowerCase();
+                if (lower.includes('physics') || lower.includes('ohm') || lower.includes('voltage') || lower.includes('electricity')) return 'Roadmap (Physics)';
+                if (lower.includes('dbms') || lower.includes('sql') || lower.includes('relational') || lower.includes('database')) return 'Roadmap (DBMS)';
+                if (lower.includes('biology') || lower.includes('cell') || lower.includes('plant')) return 'Roadmap (Biology)';
+                if (lower.includes('python') || lower.includes('coding') || lower.includes('program')) return 'Roadmap (Python)';
+                if (lower.includes('machine learning') || lower.includes('ml')) return 'Roadmap (ML)';
+                const firstWord = topic.split(/[:\-\s]+/)[0];
+                return firstWord && firstWord.length > 2 ? `Roadmap (${firstWord})` : 'Roadmap';
+              })()}
             </button>
             {learningReport && (
               <button
@@ -313,7 +522,7 @@ export default function App() {
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="flex items-center gap-2 bg-[#F2EFEB] hover:bg-[#EAE6DF] border border-[#1C1C1C]/15 px-2.5 py-1.5 rounded-xl transition-all shadow-2xs group"
-              title="Student OAuth Profile & 7 Personalization Dimensions"
+              title="Student Profile & Personalization Settings"
               id="student-oauth-btn"
             >
               {learnerProfile.avatarUrl ? (
@@ -329,7 +538,7 @@ export default function App() {
               )}
               <div className="text-left hidden sm:block">
                 <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none flex items-center gap-1">
-                  <span>Student Profile</span>
+                  <span>Profile</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </span>
                 <span className="font-bold text-[#1C1C1C] text-[11px] truncate max-w-[100px] block">
@@ -338,12 +547,14 @@ export default function App() {
               </div>
             </button>
 
+            {/* Sign Out Button */}
             <button
-              onClick={() => setCurrentView('path')}
-              className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] font-medium flex items-center gap-1.5 transition-colors shadow-sm"
+              onClick={() => setIsAuthenticated(false)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#1C1C1C]/15 hover:bg-[#EAE6DF] text-[#666666] hover:text-[#1C1C1C] text-xs flex items-center gap-1 transition-all"
+              title="Sign Out to Login Screen"
             >
-              <Network className="w-3.5 h-3.5 text-[#F9F8F6]" />
-              <span className="hidden sm:inline">Roadmap</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline font-mono text-[11px]">Sign Out</span>
             </button>
           </div>
         </div>
@@ -388,16 +599,9 @@ export default function App() {
 
         {currentView === 'path' && (
           <LearningPathView
-            onSelectPathStage={(stageTitle) => {
-              setActiveLessonPlan({
-                ...PHYSICS_OHMS_LAW_PLAN,
-                topic: `Machine Learning: ${stageTitle}`,
-                educationalLevel: 'intermediate',
-                timeBudget: '20min',
-                language: 'en'
-              });
-              setCurrentView('teaching');
-            }}
+            currentTopic={activeLessonPlan?.topic || learnerProfile.learningObjective}
+            learnerProfile={learnerProfile}
+            onSelectPathStage={handleSelectPathStage}
             onBackToSetup={() => setCurrentView('setup')}
           />
         )}
@@ -405,7 +609,7 @@ export default function App() {
 
       {/* Subtle Editorial Colophon Footer */}
       <footer className="py-4 px-6 border-t border-[#1C1C1C]/10 bg-[#F2EFEB] text-center text-xs text-[#666666] font-serif">
-        <span>OutLearn AI Teacher • AI Innovation Hackathon 2026 • Bharat Academix Pedagogical Edition</span>
+        <span>OutLearn AI Teacher • Adaptive Personalization Engine</span>
       </footer>
 
       {/* Student Profile & 7 Personalization Dimensions Modal */}

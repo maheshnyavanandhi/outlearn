@@ -37,7 +37,8 @@ import {
 } from 'lucide-react';
 
 interface TeachingRoomProps {
-  lessonPlan: LessonPlan;
+  lessonPlan?: LessonPlan;
+  topic?: string;
   learnerProfile: LearnerProfile;
   onUpdateProfile: (profile: LearnerProfile) => void;
   onFinishLesson: (lessonPlan: LessonPlan, profile: LearnerProfile) => void;
@@ -45,11 +46,13 @@ interface TeachingRoomProps {
 
 export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   lessonPlan,
+  topic,
   learnerProfile,
   onUpdateProfile,
   onFinishLesson
 }) => {
   const orchestrator = useLessonOrchestrator({
+    topic,
     lessonPlan,
     learnerProfile,
     onUpdateProfile,
@@ -57,7 +60,9 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   });
 
   const {
+    activeLessonPlan,
     lifecyclePhase,
+    isOrchestratingLifecycle,
     currentStepIdx,
     currentBeatIdx,
     currentStep,
@@ -65,6 +70,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
     activeSpeechText,
     understandSummary,
     planSummary,
+    conversationHistory,
     isPlaying,
     isSpeaking,
     speechRate,
@@ -101,8 +107,23 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
     handleJumpToStep
   } = orchestrator;
 
+  const effectivePlan = activeLessonPlan || lessonPlan || {
+    id: 'dynamic-plan',
+    topic: topic || 'Dynamic AI Lesson',
+    subject: 'General Knowledge',
+    educationalLevel: learnerProfile.educationalLevel || 'beginner',
+    timeBudget: learnerProfile.timeBudget || '20min',
+    totalMinutes: 20,
+    language: learnerProfile.preferredLanguage || 'en',
+    teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+    prerequisitesOverview: [],
+    steps: []
+  };
+  const steps = effectivePlan.steps || [];
+
   const [showCaptions, setShowCaptions] = useState(true);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<'logs' | 'transcript'>('logs');
   const [isDeterminationsModalOpen, setIsDeterminationsModalOpen] = useState(false);
   const [visualMode, setVisualMode] = useState<'d3' | 'standard'>('d3');
 
@@ -123,17 +144,17 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-[#1C1C1C] animate-pulse" />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-base font-serif font-bold text-[#1C1C1C]">{lessonPlan.topic}</h2>
+              <h2 className="text-sm sm:text-base font-serif font-bold text-[#1C1C1C]">{effectivePlan.topic}</h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15">
-                Step {currentStepIdx + 1}/{lessonPlan.steps?.length || 1}
+                Step {currentStepIdx + 1}/{steps.length || 1}
               </span>
               <span className="hidden lg:inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono border border-emerald-300/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                <span>AI Orchestrator Active</span>
+                <span>AI Orchestrator {isOrchestratingLifecycle ? 'Evaluating...' : 'Active'}</span>
               </span>
             </div>
             <p className="text-xs text-[#666666] truncate max-w-md">
-              Teaching: <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || lessonPlan.topic}</strong>
+              Teaching: <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || effectivePlan.topic}</strong>
             </p>
           </div>
         </div>
@@ -173,27 +194,24 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
         {/* Action Controls & Finish Assessment Button */}
         <div className="flex items-center gap-2">
-          {/* Blueprint Determinations Button */}
+          {/* AI Pedagogical Blueprint Modal Trigger */}
           <button
             onClick={() => setIsDeterminationsModalOpen(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#E6E3DB] text-xs font-semibold flex items-center gap-1.5 transition-all"
-            title="Inspect 8 Pedagogical Determinations"
+            className="hidden sm:flex px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold items-center gap-1.5 transition-all"
+            title="View 8 Pedagogical Determinations Blueprint"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span className="hidden sm:inline">8 Determinations</span>
+            <Brain className="w-3.5 h-3.5 text-[#1C1C1C]" />
+            <span className="hidden md:inline font-mono text-[11px]">AI Blueprint</span>
           </button>
 
-          {/* Decision State Machine Drawer Toggle */}
+          {/* Teacher Brain / Decision Logs Drawer Trigger */}
           <button
-            onClick={() => setIsLogDrawerOpen((v) => !v)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] border border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#E6E3DB] text-xs font-semibold flex items-center gap-1.5 transition-all"
-            title="Inspect Session Analytics"
+            onClick={() => setIsLogDrawerOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold flex items-center gap-1.5 transition-all"
+            title="View Teacher Decision Engine Logs & Conversation Transcript"
           >
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Session Log</span>
-            <span className="w-4 h-4 rounded-full bg-[#1C1C1C] text-[#F9F8F6] text-[10px] flex items-center justify-center font-mono">
-              {decisionLogs.length}
-            </span>
+            <ListOrdered className="w-3.5 h-3.5 text-[#1C1C1C]" />
+            <span className="hidden sm:inline font-mono text-[11px]">Trace Logs</span>
           </button>
 
           {/* Language Switcher dropdown */}
@@ -213,7 +231,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
           {/* Finish & Take Final Quiz Button */}
           <button
-            onClick={() => onFinishLesson(lessonPlan, learnerProfile)}
+            onClick={() => onFinishLesson(effectivePlan, learnerProfile)}
             className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
           >
             <GraduationCap className="w-4 h-4" />
@@ -221,22 +239,6 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           </button>
         </div>
       </div>
-
-      {/* Lifecycle Banner during UNDERSTAND or PLAN Phase */}
-      {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN') && (
-        <div className="bg-[#1C1C1C] text-[#F9F8F6] px-4 py-2 flex items-center justify-between text-xs font-mono shadow-inner animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="p-1 rounded bg-[#333333] text-amber-400">
-              {lifecyclePhase === 'UNDERSTAND' ? <Brain className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
-            </span>
-            <span>
-              <strong>AI TEACHER LIFECYCLE [{lifecyclePhase}]:</strong>{' '}
-              {lifecyclePhase === 'UNDERSTAND' ? understandSummary : planSummary}
-            </span>
-          </div>
-          <span className="text-[10px] text-[#A0A0A0] hidden sm:inline">Initializing interaction engine...</span>
-        </div>
-      )}
 
       {/* Main Split-Stage Arena */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-7xl mx-auto w-full">
@@ -308,7 +310,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <span className="text-[10px] text-[#777777] font-normal font-sans">Click to jump</span>
             </h4>
             <div className="space-y-1">
-              {lessonPlan.steps.map((step, idx) => (
+              {steps.map((step, idx) => (
                 <button
                   key={step.id || idx}
                   onClick={() => handleJumpToStep(idx)}
@@ -347,110 +349,30 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
         {/* Right Column: Visual Teaching Canvas & Interaction Zone */}
         <div className="lg:col-span-8 flex flex-col gap-3">
-          {/* Visual Canvas Mode Switcher Bar */}
-          <div className="flex items-center justify-between px-2 bg-[#FAF9F5] p-1 rounded-xl border border-[#1C1C1C]/15 text-xs font-mono">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setVisualMode('d3')}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
-                  visualMode === 'd3'
-                    ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-sm'
-                    : 'text-[#666666] hover:text-[#1C1C1C] hover:bg-[#E6E3DB]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>D3.js Dynamic Diagram</span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-[#1C1C1C] font-bold">
-                  Interactive
-                </span>
-              </button>
-
-              <button
-                onClick={() => setVisualMode('standard')}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
-                  visualMode === 'standard'
-                    ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-sm'
-                    : 'text-[#666666] hover:text-[#1C1C1C] hover:bg-[#E6E3DB]'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Subject Schematic</span>
-              </button>
-            </div>
-
-            <span className="hidden sm:inline text-[10px] text-[#777777] font-sans">
-              Vector SVG with real-time parameter dynamics
-            </span>
-          </div>
-
           {/* Visual Canvas Area */}
-          <div className="flex-1 min-h-[420px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm">
-            {visualMode === 'd3' ? (
-              <D3InteractiveDiagram
-                topic={lessonPlan.topic}
-                subject={currentStep?.concept?.subject || lessonPlan.subject}
-                conceptName={currentStep?.concept?.name}
-                highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-              />
-            ) : (
-              /* Dynamic Subject Visual Rendering */
-              (() => {
-                const stepSub = currentStep?.concept?.subject;
-                const planSub = lessonPlan.subject;
-                const topicLower = `${lessonPlan.topic} ${currentStep?.concept?.name || ''}`.toLowerCase();
-
-                const activeSubject = (stepSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(stepSub))
-                  ? stepSub
-                  : (planSub && ['physics', 'dbms', 'biology', 'programming', 'mathematics'].includes(planSub))
-                  ? planSub
-                  : (topicLower.includes('dbms') || topicLower.includes('sql') || topicLower.includes('database'))
-                  ? 'dbms'
-                  : (topicLower.includes('biology') || topicLower.includes('cell') || topicLower.includes('respiration'))
-                  ? 'biology'
-                  : (topicLower.includes('math') || topicLower.includes('algebra') || topicLower.includes('calculus'))
-                  ? 'mathematics'
-                  : (topicLower.includes('physics') || topicLower.includes('circuit') || topicLower.includes('ohm') || topicLower.includes('voltage') || topicLower.includes('newton'))
-                  ? 'physics'
-                  : 'programming';
-
-                if (activeSubject === 'physics') {
-                  return (
-                    <PhysicsCircuitVisual
-                      showAnalogyMode={showAnalogyAlternative}
-                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                    />
-                  );
-                } else if (activeSubject === 'dbms') {
-                  return (
-                    <DbmsRelationalVisual
-                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                    />
-                  );
-                } else if (activeSubject === 'biology') {
-                  return (
-                    <BiologyCellVisual
-                      highlightTarget={currentBeat?.visualCue?.highlightTarget}
-                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                    />
-                  );
-                } else if (activeSubject === 'mathematics') {
-                  return (
-                    <MathStepsVisual
-                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                    />
-                  );
-                } else {
-                  return (
-                    <CodeExecutionVisual
-                      annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-                    />
-                  );
-                }
-              })()
+          <div className="flex-1 min-h-[420px] bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 overflow-hidden flex flex-col shadow-sm relative">
+            {/* Dynamic AI Orchestrator Lifecycle Banner overlay during UNDERSTAND or PLAN phases */}
+            {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN' || isOrchestratingLifecycle) && (
+              <div className="absolute top-3 left-3 right-3 z-20 p-3 rounded-xl bg-[#FFFFFF]/95 backdrop-blur-md border border-[#1C1C1C]/20 shadow-lg animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  <span className="text-[11px] font-mono font-bold text-[#1C1C1C] uppercase tracking-wider">
+                    AI Pedagogical Orchestration ({lifecyclePhase} Phase)
+                  </span>
+                </div>
+                <p className="text-xs text-[#333333] font-serif leading-relaxed">
+                  {lifecyclePhase === 'UNDERSTAND' ? understandSummary || 'Calibrating learner profile and prior knowledge...' : planSummary || 'Structuring 8 pedagogical determinations and concept beats...'}
+                </p>
+              </div>
             )}
+
+            <D3InteractiveDiagram
+              topic={effectivePlan.topic}
+              subject={currentStep?.concept?.subject || effectivePlan.subject}
+              conceptName={currentStep?.concept?.name}
+              highlightTarget={currentBeat?.visualCue?.highlightTarget}
+              annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+            />
           </div>
 
           {/* Subtitles & Timed Caption Track */}
@@ -540,8 +462,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         </div>
       </div>
 
-      {/* Checkpoint Interactive Dialog (When pauseForInteraction or QUESTION phase is active) */}
-      {(lifecyclePhase === 'QUESTION' || lifecyclePhase === 'ADAPT' || (isAwaitingResponse && currentBeat?.checkpoint)) && currentBeat?.checkpoint && (
+      {/* Checkpoint Interactive Dialog (When QUESTION phase or pauseForInteraction is active, and no active misconception) */}
+      {(lifecyclePhase === 'QUESTION' || (isAwaitingResponse && currentBeat?.checkpoint)) && !activeMisconception && currentBeat?.checkpoint && (
         <div className="fixed inset-0 z-50 bg-[#1C1C1C]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#FFFFFF] border border-[#1C1C1C]/20 max-w-xl w-full rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3">
@@ -551,7 +473,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                 </span>
                 <div>
                   <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
-                    {lifecyclePhase === 'ADAPT' ? 'Adaptive Re-Explanation' : 'Checkpoint: Diagnostic Question'}
+                    Checkpoint: Diagnostic Question
                   </h3>
                   <p className="text-[11px] text-[#666666] font-sans">Concept: {currentStep?.concept?.name}</p>
                 </div>
@@ -599,42 +521,119 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               </div>
             )}
 
-            {/* Misconception Diagnosis Alert Banner if triggered */}
-            {activeMisconception && (
-              <div className="p-3.5 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/40 text-xs text-[#92400E] mb-4 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-1.5 font-bold text-[#B45309] mb-1">
-                  <AlertTriangle className="w-4 h-4 text-[#D97706]" />
-                  <span>Teacher Diagnosis: {activeMisconception.name}</span>
-                </div>
-                <p className="text-[11px] text-[#92400E] mb-1.5 font-sans">
-                  <strong>Why this happened: </strong> {activeMisconception.diagnosis}
-                </p>
-                <div className="p-2.5 rounded-lg bg-[#FDE68A]/60 text-[#78350F] text-[11px] font-serif">
-                  <strong>Teacher Note: </strong> {activeMisconception.speech}
-                </div>
-              </div>
-            )}
-
             {/* Action Buttons */}
             <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/15">
-              {lifecyclePhase === 'ADAPT' ? (
-                <button
-                  onClick={handleContinueFromMisconception}
-                  className="w-full py-2.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <span>Understood! Continue Lesson</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleCheckAnswer()}
-                  disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
-                  className="ml-auto px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
-                >
-                  {isSubmittingAnswer ? 'Diagnosing with AI...' : 'Submit Response'}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button
+                onClick={() => handleCheckAnswer()}
+                disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
+                className="ml-auto px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all font-sans"
+              >
+                {isSubmittingAnswer ? 'Diagnosing with AI...' : 'Submit Response'}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Growth & Correction Overlay (When AI identifies a Misconception during ADAPT phase) */}
+      {(lifecyclePhase === 'ADAPT' || activeMisconception) && activeMisconception && (
+        <div className="fixed inset-0 z-50 bg-[#1C1C1C]/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#1C1C1C]/20 max-w-2xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 flex flex-col gap-5 relative overflow-hidden">
+            {/* Top decorative gradient bar */}
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-500" />
+
+            {/* Header: Encouraging Growth Mindset Banner */}
+            <div className="flex items-start justify-between gap-3 pt-2">
+              <div className="flex items-center gap-3">
+                <span className="p-3 rounded-2xl bg-amber-50 text-amber-900 border border-amber-200/80 shadow-xs flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-6 h-6 text-amber-600" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-900 px-2 py-0.5 rounded-full bg-amber-100/80 border border-amber-300/60">
+                      Growth Insight • Micro-Correction
+                    </span>
+                    <span className="text-[10px] font-mono text-[#777777]">
+                      Phase: ADAPT
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-serif font-bold text-[#1C1C1C]">
+                    Let's Refine This Concept Together
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Subtitle Message */}
+            <p className="text-xs sm:text-sm text-[#444444] font-serif leading-relaxed bg-[#FAF9F5] p-3.5 rounded-2xl border border-[#1C1C1C]/10">
+              <Sparkles className="w-4 h-4 text-amber-600 inline mr-1.5 align-text-bottom" />
+              Mistakes are the most powerful part of learning! Your response revealed a common intuitive trap. Here is an easy way to think about it:
+            </p>
+
+            {/* Dual Cards: Identified Intuition vs Constructive Teacher Explanation */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Card 1: Identified Intuition Gap */}
+              <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono font-bold uppercase text-amber-900 tracking-wider">
+                      Identified Assumption
+                    </span>
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-200/60 text-amber-950">
+                      {activeMisconception.category || 'Intuition Trap'}
+                    </span>
+                  </div>
+                  <h4 className="font-serif font-bold text-[#1C1C1C] text-sm mb-1.5">
+                    {activeMisconception.name}
+                  </h4>
+                  <p className="text-xs text-[#555555] leading-relaxed font-sans">
+                    {activeMisconception.diagnosis}
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: Teacher Analogy & Clarification */}
+              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#1C1C1C]/15 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Pedagogical Analogy</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#1C1C1C] font-serif leading-relaxed italic">
+                    "{activeMisconception.speech}"
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-[#1C1C1C]/10 flex items-center justify-between">
+                  <button
+                    onClick={() => handleReplayBeat()}
+                    className="text-[11px] font-mono text-[#1C1C1C] hover:text-[#555555] flex items-center gap-1 font-semibold underline decoration-dotted"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Replay Explanation</span>
+                  </button>
+                  <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Mastery Calibration Active
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Growth Action Footer Button */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/15 mt-1">
+              <div className="text-[11px] text-[#666666] font-sans hidden sm:block">
+                Pressing continue updates your concept mastery profile.
+              </div>
+              <button
+                onClick={handleContinueFromMisconception}
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-lg flex items-center justify-center gap-2 transition-all group"
+              >
+                <span>Understood! Apply This & Continue</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
             </div>
           </div>
         </div>
@@ -660,7 +659,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
 
             <p className="text-xs text-[#666666] mb-3 font-sans">
-              Ask anything about <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || lessonPlan.topic}</strong>. OutLearn answers and seamlessly resumes your lesson.
+              Ask anything about <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || effectivePlan.topic}</strong>. OutLearn answers and seamlessly resumes your lesson.
             </p>
 
             <div className="flex gap-2 mb-3">
@@ -720,38 +719,72 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <span className="p-1 rounded bg-[#F2EFEB] text-[#1C1C1C]">
                 <ListOrdered className="w-4 h-4" />
               </span>
-              <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">Teacher Decision Engine</h3>
+              <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">Teacher AI Trace</h3>
             </div>
             <button onClick={() => setIsLogDrawerOpen(false)} className="text-[#666666] hover:text-[#1C1C1C]">
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <p className="text-[11px] text-[#666666] my-2 font-sans">
-            Real-time trace of pedagogical action selections, misconception detections, and strategy switches.
-          </p>
+          {/* Drawer Tab Switcher */}
+          <div className="flex bg-[#F2EFEB] p-1 rounded-xl my-2 border border-[#1C1C1C]/10 text-xs font-mono font-medium">
+            <button
+              onClick={() => setDrawerTab('logs')}
+              className={`flex-1 py-1 rounded-lg text-center transition-all ${
+                drawerTab === 'logs' ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-sm' : 'text-[#666666] hover:text-[#1C1C1C]'
+              }`}
+            >
+              Decision Logs ({decisionLogs.length})
+            </button>
+            <button
+              onClick={() => setDrawerTab('transcript')}
+              className={`flex-1 py-1 rounded-lg text-center transition-all ${
+                drawerTab === 'transcript' ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-sm' : 'text-[#666666] hover:text-[#1C1C1C]'
+              }`}
+            >
+              AI Transcript ({conversationHistory.length})
+            </button>
+          </div>
 
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-            {decisionLogs.length === 0 ? (
-              <div className="text-xs text-[#888888] italic p-4 text-center">No actions logged yet...</div>
-            ) : (
-              decisionLogs.map((entry) => (
-                <div key={entry.id} className="p-2.5 rounded-xl bg-[#F9F8F6] border border-[#1C1C1C]/15 text-xs">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="px-1.5 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono text-[10px] font-bold border border-[#1C1C1C]/15">
-                      {entry.action}
-                    </span>
-                    <span className="text-[10px] text-[#888888] font-mono">{entry.timestamp}</span>
-                  </div>
-                  <div className="font-semibold text-[#1C1C1C] text-[11px] mb-0.5 font-serif">{entry.conceptName}</div>
-                  <div className="text-[#555555] text-[10px] leading-relaxed">{entry.reason}</div>
-                  {entry.strategySwitched && (
-                    <div className="mt-1 text-[10px] text-[#B45309] font-mono">
-                      ↳ Strategy Switched: {entry.strategySwitched}
+            {drawerTab === 'logs' ? (
+              decisionLogs.length === 0 ? (
+                <div className="text-xs text-[#888888] italic p-4 text-center">No actions logged yet...</div>
+              ) : (
+                decisionLogs.map((entry) => (
+                  <div key={entry.id} className="p-2.5 rounded-xl bg-[#F9F8F6] border border-[#1C1C1C]/15 text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="px-1.5 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] font-mono text-[10px] font-bold border border-[#1C1C1C]/15">
+                        {entry.action}
+                      </span>
+                      <span className="text-[10px] text-[#888888] font-mono">{entry.timestamp}</span>
                     </div>
-                  )}
-                </div>
-              ))
+                    <div className="font-semibold text-[#1C1C1C] text-[11px] mb-0.5 font-serif">{entry.conceptName}</div>
+                    <div className="text-[#555555] text-[10px] leading-relaxed">{entry.reason}</div>
+                    {entry.strategySwitched && (
+                      <div className="mt-1 text-[10px] text-[#B45309] font-mono">
+                        ↳ Strategy Switched: {entry.strategySwitched}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )
+            ) : (
+              conversationHistory.length === 0 ? (
+                <div className="text-xs text-[#888888] italic p-4 text-center">No conversation history recorded yet...</div>
+              ) : (
+                conversationHistory.map((item) => (
+                  <div key={item.id} className={`p-2.5 rounded-xl border text-xs ${
+                    item.role === 'user' ? 'bg-amber-50/70 border-amber-200 text-amber-950' : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#1C1C1C]'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1 font-mono text-[10px]">
+                      <span className="font-bold uppercase">{item.role === 'user' ? 'Student' : item.role === 'assistant' ? 'OutLearn AI' : 'System'}</span>
+                      <span className="text-[#888888]">{item.phase || 'EXPLAIN'} • {item.timestamp}</span>
+                    </div>
+                    <p className="font-serif leading-relaxed text-[11px] whitespace-pre-wrap">{item.content}</p>
+                  </div>
+                ))
+              )
             )}
           </div>
         </div>
@@ -771,7 +804,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                     8 Pedagogical Determinations Blueprint
                   </h3>
                   <p className="text-[11px] text-[#666666] font-sans">
-                    OutLearn's pedagogical reasoning for {lessonPlan.topic}
+                    OutLearn's pedagogical reasoning for {effectivePlan.topic}
                   </p>
                 </div>
               </div>
@@ -784,23 +817,23 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
 
             <div className="overflow-y-auto space-y-3 pr-1 text-xs">
-              {lessonPlan.determinations ? (
+              {effectivePlan.determinations ? (
                 <>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
                     <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
                       1. What Needs to be Taught
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.whatNeedsToBeTaught}
+                      {effectivePlan.determinations.whatNeedsToBeTaught}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
                     <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-1">
                       2. Which Concepts Should be Covered First
                     </span>
-                    {Array.isArray(lessonPlan.determinations.conceptsCoveredFirst) ? (
+                    {Array.isArray(effectivePlan.determinations.conceptsCoveredFirst) ? (
                       <div className="flex flex-wrap gap-1 font-mono text-[10px]">
-                        {lessonPlan.determinations.conceptsCoveredFirst.map((c, i) => (
+                        {effectivePlan.determinations.conceptsCoveredFirst.map((c, i) => (
                           <span key={i} className="px-1.5 py-0.5 rounded bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/10">
                             {i + 1}. {c}
                           </span>
@@ -808,7 +841,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       </div>
                     ) : (
                       <p className="text-[#333333] font-serif leading-relaxed">
-                        {lessonPlan.determinations.conceptsCoveredFirst || lessonPlan.determinations.conceptsOrderReasoning}
+                        {effectivePlan.determinations.conceptsCoveredFirst || effectivePlan.determinations.conceptsOrderReasoning}
                       </p>
                     )}
                   </div>
@@ -817,22 +850,22 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       3. Depth of Explanation
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.depthOfExplanation || lessonPlan.determinations.depthCalibration}
+                      {effectivePlan.determinations.depthOfExplanation || effectivePlan.determinations.depthCalibration}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
                     <span className="font-mono font-bold text-[10px] text-[#1C1C1C] uppercase block mb-0.5">
                       4. Examples or Visuals
                     </span>
-                    {Array.isArray(lessonPlan.determinations.examplesAndVisuals) ? (
+                    {Array.isArray(effectivePlan.determinations.examplesAndVisuals) ? (
                       <div className="space-y-0.5 font-sans text-[11px] text-[#444444]">
-                        {lessonPlan.determinations.examplesAndVisuals.map((ex, i) => (
+                        {effectivePlan.determinations.examplesAndVisuals.map((ex, i) => (
                           <div key={i}>• {ex}</div>
                         ))}
                       </div>
                     ) : (
                       <p className="text-[#333333] font-serif leading-relaxed">
-                        {lessonPlan.determinations.examplesAndVisuals}
+                        {effectivePlan.determinations.examplesAndVisuals}
                       </p>
                     )}
                   </div>
@@ -841,7 +874,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       5. When Questioned
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.questioningTiming}
+                      {effectivePlan.determinations.questioningTiming}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
@@ -849,7 +882,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       6. Understanding Verification
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.understandingVerification || lessonPlan.determinations.understandingCriteria}
+                      {effectivePlan.determinations.understandingVerification || effectivePlan.determinations.understandingCriteria}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
@@ -857,7 +890,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       7. Simplification or Expansion
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.simplificationOrExpansion || lessonPlan.determinations.adaptationTriggers}
+                      {effectivePlan.determinations.simplificationOrExpansion || effectivePlan.determinations.adaptationTriggers}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15">
@@ -865,9 +898,9 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
                       8. What Should be Taught Next
                     </span>
                     <p className="text-[#333333] font-serif leading-relaxed">
-                      {lessonPlan.determinations.whatShouldBeTaughtNext || lessonPlan.determinations.nextStepsRecommendation}
+                      {effectivePlan.determinations.whatShouldBeTaughtNext || effectivePlan.determinations.nextStepsRecommendation}
                     </p>
-                    {lessonPlan.determinations.testAtEnd && (
+                    {effectivePlan.determinations.testAtEnd && (
                       <span className="mt-2 inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300/50">
                         ✓ Summative test scheduled at end of session
                       </span>
@@ -908,7 +941,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
               <button
-                onClick={() => onFinishLesson(lessonPlan, learnerProfile)}
+                onClick={() => onFinishLesson(effectivePlan, learnerProfile)}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all font-sans"
               >
                 <CheckCircle2 className="w-4 h-4" />

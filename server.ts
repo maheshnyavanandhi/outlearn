@@ -71,14 +71,14 @@ function cleanAndParseJson<T = any>(rawText: string): T {
   }
 }
 
-// Resilient Gemini invoker trying fast flash-lite, then flash-latest, then 3.8-flash
+// Resilient Gemini invoker prioritizing gemini-3.8-flash, with fallback models
 async function callGemini(contents: string, isJson: boolean = false): Promise<{ text: string; modelUsed: string }> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error('GEMINI_API_KEY is not configured in server environment');
   }
 
-  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+  const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
   let lastErr: any = null;
 
   for (const model of candidateModels) {
@@ -94,6 +94,8 @@ async function callGemini(contents: string, isJson: boolean = false): Promise<{ 
     } catch (err: any) {
       console.warn(`[OutLearn Server] Model ${model} failed, attempting next model:`, err?.message || err);
       lastErr = err;
+      // Brief pause before trying next model to handle transient rate limits/spikes
+      await new Promise((resolve) => setTimeout(resolve, 350));
     }
   }
 
@@ -107,7 +109,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     status: 'ok',
     hasGeminiKey: hasKey,
     backend: 'Node.js Express + Google GenAI',
-    defaultModel: 'gemini-3.1-flash-lite',
+    defaultModel: 'gemini-3.8-flash',
     time: new Date().toISOString()
   });
 });
@@ -654,6 +656,68 @@ The student just paused your lesson and asked:
     return res.json({
       answer: `Great question! In ${currentConcept || currentTopic}, this connects directly to the core principle in our textbook material. When you change one parameter, the balance responds immediately. Let us keep this in mind as we proceed.`,
       resumePrompt: 'Shall we resume our lesson right where we left off?'
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.5. Dynamic Curriculum Roadmap Generation Endpoint
+app.post('/api/generate-roadmap', async (req: Request, res: Response) => {
+  try {
+    const { topic = 'General Science', educationalLevel = 'beginner', learningObjective = '' } = req.body;
+    const client = getGeminiClient();
+
+    if (client) {
+      const prompt = `You are OutLearn's master educational curriculum architect.
+Generate a structured, 6-stage sequential learning roadmap graph tailored specifically to the subject/topic: "${topic}".
+Learner Educational Level: ${educationalLevel}
+Learning Objective: "${learningObjective}"
+
+Guidelines:
+- Create 6 distinct, logical learning stages that build progressively on prerequisites.
+- For each stage, provide: title, level ("beginner" | "intermediate" | "advanced"), status ("mastered" | "understood" | "developing" | "unknown"), conceptsCount (e.g. 5 to 8), and a short 1-sentence description.
+- Stage 1 should be 'mastered', Stage 2 'understood', Stage 3 'developing' (current milestone), and Stages 4-6 'unknown'.
+
+Return STRICT RAW JSON matching this structure:
+{
+  "title": string,
+  "subject": string,
+  "description": string,
+  "stages": [
+    {
+      "id": string,
+      "title": string,
+      "level": "beginner" | "intermediate" | "advanced",
+      "status": "mastered" | "understood" | "developing" | "unknown",
+      "conceptsCount": number,
+      "description": string
+    }
+  ]
+}`;
+
+      const { text, modelUsed } = await callGemini(prompt, true);
+      const parsed = cleanAndParseJson(text || '{}');
+      if (parsed && parsed.stages && Array.isArray(parsed.stages)) {
+        return res.json({ success: true, roadmap: parsed, isLiveAi: true, modelUsed });
+      }
+    }
+
+    return res.json({
+      success: true,
+      roadmap: {
+        title: `${topic} Adaptive Roadmap`,
+        subject: 'general',
+        description: `6-stage structured curriculum created for ${topic}.`,
+        stages: [
+          { id: 'stage-1', title: `Foundations of ${topic}`, level: 'beginner', status: 'mastered', conceptsCount: 5, description: 'Core definitions and initial concepts.' },
+          { id: 'stage-2', title: `Core Principles & Models`, level: 'beginner', status: 'understood', conceptsCount: 6, description: 'Fundamental operational rules and mental models.' },
+          { id: 'stage-3', title: `Analytical Applications & Mechanisms`, level: 'intermediate', status: 'developing', conceptsCount: 7, description: 'Practical calculations and mechanism execution.' },
+          { id: 'stage-4', title: `Problem Solving & Scenarios`, level: 'intermediate', status: 'unknown', conceptsCount: 8, description: 'Applied problem solving in real scenarios.' },
+          { id: 'stage-5', title: `Advanced Diagnostics & Edge Cases`, level: 'advanced', status: 'unknown', conceptsCount: 6, description: 'Edge case resolution and diagnostic reasoning.' },
+          { id: 'stage-6', title: `Mastery Synthesis & Integration`, level: 'advanced', status: 'unknown', conceptsCount: 7, description: 'Comprehensive subject synthesis.' }
+        ]
+      }
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

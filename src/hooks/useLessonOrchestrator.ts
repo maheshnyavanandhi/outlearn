@@ -15,21 +15,105 @@ import { speechService } from '../services/speechService';
 
 export type LifecyclePhase = 'UNDERSTAND' | 'PLAN' | 'EXPLAIN' | 'QUESTION' | 'ADAPT' | 'COMPLETED';
 
+export interface ConversationTurn {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  phase: LifecyclePhase;
+  timestamp: string;
+}
+
 export interface UseLessonOrchestratorProps {
-  lessonPlan: LessonPlan;
+  topic?: string;
+  lessonPlan?: LessonPlan;
   learnerProfile: LearnerProfile;
   onUpdateProfile?: (profile: LearnerProfile) => void;
   onFinishLesson?: (lessonPlan: LessonPlan, profile: LearnerProfile) => void;
 }
 
 export function useLessonOrchestrator({
-  lessonPlan,
+  topic: topicProp,
+  lessonPlan: initialLessonPlan,
   learnerProfile,
   onUpdateProfile,
   onFinishLesson
 }: UseLessonOrchestratorProps) {
-  // Core Lifecycle State
+  // Determine effective topic and lesson plan
+  const effectiveTopic = topicProp || initialLessonPlan?.topic || 'Curriculum Subject';
+
+  // Dynamic Lesson Plan State (Can be refined or generated live via Gemini API)
+  const [activeLessonPlan, setActiveLessonPlan] = useState<LessonPlan>(() => {
+    if (initialLessonPlan) return initialLessonPlan;
+    return {
+      id: `plan-${Date.now()}`,
+      topic: effectiveTopic,
+      subject: 'physics',
+      educationalLevel: learnerProfile.educationalLevel || 'beginner',
+      timeBudget: learnerProfile.timeBudget || '20min',
+      totalMinutes: 20,
+      language: learnerProfile.preferredLanguage || 'en',
+      teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+      prerequisitesOverview: ['Fundamental concept definitions'],
+      ragGrounded: true,
+      steps: [
+        {
+          id: 'step-1',
+          concept: {
+            id: 'c-1',
+            name: effectiveTopic,
+            subject: 'physics',
+            summary: `Core introduction to ${effectiveTopic}`,
+            difficulty: learnerProfile.educationalLevel || 'beginner',
+            prerequisites: []
+          },
+          allocatedMinutes: 20,
+          masteryState: 'unknown',
+          beats: [
+            {
+              id: 'beat-1',
+              conceptId: 'c-1',
+              action: 'INTRODUCE',
+              speechEn: `Welcome! Today we will explore ${effectiveTopic}. Let us build an intuitive understanding step by step.`,
+              caption: `Introduction to ${effectiveTopic}`,
+              visualCue: {
+                subject: 'physics',
+                viewMode: 'concept_map'
+              },
+              durationSec: 15
+            }
+          ]
+        }
+      ]
+    };
+  });
+
+  // Conversation History state
+  const [conversationHistory, setConversationHistory] = useState<ConversationTurn[]>([]);
+
+  const addConversationTurn = useCallback((
+    role: 'user' | 'assistant' | 'system',
+    content: string,
+    phase: LifecyclePhase
+  ) => {
+    if (!content || !content.trim()) return;
+    const turn: ConversationTurn = {
+      id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      role,
+      content,
+      phase,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setConversationHistory((prev) => [...prev, turn]);
+  }, []);
+
+  // Sync active lesson plan when initial prop changes
+  useEffect(() => {
+    setActiveLessonPlan(initialLessonPlan);
+  }, [initialLessonPlan]);
+
+  // Core Lifecycle State (Understand -> Plan -> Explain -> Question -> Adapt -> Completed)
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>('UNDERSTAND');
+  const [isOrchestratingLifecycle, setIsOrchestratingLifecycle] = useState<boolean>(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [currentBeatIdx, setCurrentBeatIdx] = useState(0);
 
@@ -38,8 +122,8 @@ export function useLessonOrchestrator({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(lessonPlan?.language || 'en');
-  const [teacherPersonality, setTeacherPersonality] = useState<TeacherPersonality>(lessonPlan?.teacherPersonality || 'mentor');
+  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(initialLessonPlan?.language || learnerProfile.preferredLanguage || 'en');
+  const [teacherPersonality, setTeacherPersonality] = useState<TeacherPersonality>(initialLessonPlan?.teacherPersonality || learnerProfile.teacherPersonality || 'mentor');
 
   // Checkpoint Interaction State
   const [isAwaitingResponse, setIsAwaitingResponse] = useState(false);
@@ -72,9 +156,11 @@ export function useLessonOrchestrator({
   const [understandSummary, setUnderstandSummary] = useState('');
   const [planSummary, setPlanSummary] = useState('');
 
-  // Current active step and beat
-  const currentStep: LessonStep = lessonPlan.steps[currentStepIdx] || lessonPlan.steps[0];
-  const currentBeat: TeachingBeat = currentStep?.beats[currentBeatIdx] || currentStep?.beats[0];
+  // Current active step and beat derived from activeLessonPlan
+  const steps = activeLessonPlan?.steps || [];
+  const currentStep: LessonStep = steps[currentStepIdx] || steps[0];
+  const beats = currentStep?.beats || [];
+  const currentBeat: TeachingBeat = beats[currentBeatIdx] || beats[0];
 
   // Helper: Log teaching actions into decision state machine
   const logTeachingAction = useCallback((
@@ -87,12 +173,12 @@ export function useLessonOrchestrator({
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       action,
-      conceptName,
+      conceptName: conceptName || activeLessonPlan.topic,
       reason,
       strategySwitched: strategy
     };
-    setDecisionLogs((prev) => [entry, ...prev.slice(0, 25)]);
-  }, []);
+    setDecisionLogs((prev) => [entry, ...prev.slice(0, 30)]);
+  }, [activeLessonPlan?.topic]);
 
   // 1. Subscribe to Speech Service
   useEffect(() => {
@@ -105,55 +191,113 @@ export function useLessonOrchestrator({
     };
   }, []);
 
-  // 2. Initialize Lifecycle (Understand -> Plan -> Explain) on Mount or Plan Change
+  // 2. Gemini-Driven Lifecycle Orchestration Engine (UNDERSTAND -> PLAN -> EXPLAIN)
   useEffect(() => {
+    let isCancelled = false;
     setCurrentStepIdx(0);
     setCurrentBeatIdx(0);
     setIsLessonCompleted(false);
     setActiveMisconception(null);
     setIsAwaitingResponse(false);
+    setIsOrchestratingLifecycle(true);
 
-    // 1. UNDERSTAND Phase
-    setLifecyclePhase('UNDERSTAND');
-    const learnerLevel = learnerProfile.educationalLevel || lessonPlan.educationalLevel || 'beginner';
-    const lang = lessonPlan.language || 'en';
-    const prereqs = lessonPlan.prerequisitesOverview?.join(', ') || 'Core introductory concepts';
-    
-    const uSummary = `Analyzed Learner Profile: ${learnerProfile.name || 'Student'} (${learnerLevel} level, language: ${lang}). Prior knowledge & prerequisites evaluated: ${prereqs}.`;
-    setUnderstandSummary(uSummary);
-    logTeachingAction(
-      'INTRODUCE',
-      lessonPlan.topic,
-      `[UNDERSTAND Phase] ${uSummary}`
-    );
+    const runLifecycle = async () => {
+      // -------------------------------------------------------------
+      // PHASE 1: UNDERSTAND
+      // -------------------------------------------------------------
+      setLifecyclePhase('UNDERSTAND');
+      const learnerLevel = learnerProfile.educationalLevel || 'beginner';
+      const lang = activeLanguage || 'en';
+      const topic = activeLessonPlan.topic;
 
-    // 2. Transition to PLAN Phase
-    const planTimer = setTimeout(() => {
+      const fallbackUSummary = `Analyzed Learner Profile: ${learnerProfile.name || 'Student'} (${learnerLevel} level, language: ${lang}, depth: ${learnerProfile.desiredDepth || 'conceptual'}). Prior knowledge: "${learnerProfile.statedPriorKnowledge || 'Basic concepts'}".`;
+      setUnderstandSummary(fallbackUSummary);
+      addConversationTurn('system', fallbackUSummary, 'UNDERSTAND');
+      logTeachingAction('INTRODUCE', topic, `[UNDERSTAND Phase] Intercepted learner profile & parameters for "${topic}".`);
+
+      // Interface with Gemini API to refine the 8 determinations if missing or on plan change
+      try {
+        const res = await fetch('/api/parse-student-instruction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instruction: `Teach me ${topic}`,
+            educationalLevel: learnerLevel,
+            statedPriorKnowledge: learnerProfile.statedPriorKnowledge,
+            learningObjective: learnerProfile.learningObjective,
+            preferredTeachingStyle: teacherPersonality,
+            preferredLanguage: lang,
+            timeBudget: learnerProfile.timeBudget || '20min',
+            desiredDepth: learnerProfile.desiredDepth || 'conceptual_overview'
+          })
+        });
+
+        if (res.ok && !isCancelled) {
+          const data = await res.json();
+          if (data.determinations) {
+            const dynamicDets = data.determinations;
+            const updatedSummary = `[Gemini AI Analysis] Learner level calibrated to ${learnerLevel}. Scope: ${dynamicDets.whatNeedsToBeTaught || fallbackUSummary}`;
+            setUnderstandSummary(updatedSummary);
+            addConversationTurn('assistant', updatedSummary, 'UNDERSTAND');
+            
+            // Attach live determinations to active plan
+            setActiveLessonPlan((prev) => ({
+              ...prev,
+              determinations: dynamicDets
+            }));
+
+            logTeachingAction(
+              'INTRODUCE',
+              topic,
+              `[UNDERSTAND Phase - Gemini Verified] 8 Pedagogical Determinations derived live via ${data.modelUsed || 'Gemini 3.1 Flash'}`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('[LessonOrchestrator] Dynamic Gemini understand phase fallback used', e);
+      }
+
+      if (isCancelled) return;
+
+      // Small natural pause for cognitive transition
+      await new Promise((r) => setTimeout(r, 600));
+      if (isCancelled) return;
+
+      // -------------------------------------------------------------
+      // PHASE 2: PLAN
+      // -------------------------------------------------------------
       setLifecyclePhase('PLAN');
-      const dets = lessonPlan.determinations;
-      const pSummary = dets?.whatNeedsToBeTaught || `Mapped ${lessonPlan.steps?.length || 1} concept steps with ${lessonPlan.totalMinutes}min budget.`;
+      const dets = activeLessonPlan?.determinations;
+      const pSummary = dets?.whatNeedsToBeTaught || `Mapped ${steps.length} concept steps with ${activeLessonPlan.totalMinutes || 20}min budget.`;
       setPlanSummary(pSummary);
+      addConversationTurn('assistant', pSummary, 'PLAN');
       logTeachingAction(
         'INTRODUCE',
-        lessonPlan.topic,
-        `[PLAN Phase] 8 Determinations established: ${pSummary.slice(0, 100)}...`
+        topic,
+        `[PLAN Phase] Sequence established: ${pSummary.slice(0, 110)}...`
       );
 
-      // 3. Transition to EXPLAIN Phase
-      const explainTimer = setTimeout(() => {
-        setLifecyclePhase('EXPLAIN');
-        logTeachingAction(
-          'EXPLAIN',
-          currentStep?.concept?.name || lessonPlan.topic,
-          `[EXPLAIN Phase] Ready to deliver concept beats in ${lang}.`
-        );
-      }, 800);
+      await new Promise((r) => setTimeout(r, 600));
+      if (isCancelled) return;
 
-      return () => clearTimeout(explainTimer);
-    }, 600);
+      // -------------------------------------------------------------
+      // PHASE 3: EXPLAIN
+      // -------------------------------------------------------------
+      setIsOrchestratingLifecycle(false);
+      setLifecyclePhase('EXPLAIN');
+      logTeachingAction(
+        'EXPLAIN',
+        steps[0]?.concept?.name || topic,
+        `[EXPLAIN Phase] Ready to deliver interactive concept beats in ${lang}.`
+      );
+    };
 
-    return () => clearTimeout(planTimer);
-  }, [lessonPlan.id]);
+    runLifecycle();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeLessonPlan.id]);
 
   // Compute active speech text in current language
   const getActiveSpeechText = useCallback((beat: TeachingBeat) => {
@@ -169,7 +313,8 @@ export function useLessonOrchestrator({
     if (!beat) return;
 
     const textToSpeak = getActiveSpeechText(beat);
-    logTeachingAction(beat.action, currentStep.concept.name, `Delivering ${beat.action} beat in ${activeLanguage}`);
+    logTeachingAction(beat.action, currentStep?.concept?.name || activeLessonPlan.topic, `Delivering ${beat.action} beat in ${activeLanguage}`);
+    addConversationTurn('assistant', textToSpeak, 'EXPLAIN');
 
     if (isMuted) {
       if (beat.pauseForInteraction || beat.checkpoint) {
@@ -187,21 +332,24 @@ export function useLessonOrchestrator({
           setLifecyclePhase('QUESTION');
           setIsAwaitingResponse(true);
           setIsPlaying(false);
+          if (beat.checkpoint?.question) {
+            addConversationTurn('assistant', beat.checkpoint.question, 'QUESTION');
+          }
           logTeachingAction(
             'ASK_CONCEPTUAL',
-            currentStep.concept.name,
-            '[QUESTION Phase] Paused for student response at formative checkpoint.'
+            currentStep?.concept?.name || activeLessonPlan.topic,
+            '[QUESTION Phase] Intercepted checkpoint pause — awaiting student response.'
           );
         } else if (isPlaying) {
           setTimeout(() => {
             advanceToNextBeat();
-          }, 800);
+          }, 400);
         }
       }
     });
-  }, [currentStep, activeLanguage, isMuted, speechRate, isPlaying, getActiveSpeechText, logTeachingAction]);
+  }, [currentStep, activeLanguage, isMuted, speechRate, isPlaying, getActiveSpeechText, logTeachingAction, activeLessonPlan?.topic, addConversationTurn]);
 
-  // Play beat automatically when isPlaying or beat/step index changes in EXPLAIN phase
+  // Auto-play speech when playing or beat changes in EXPLAIN phase
   useEffect(() => {
     if (isPlaying && currentBeat && lifecyclePhase === 'EXPLAIN') {
       deliverBeatSpeech(currentBeat);
@@ -212,26 +360,26 @@ export function useLessonOrchestrator({
   const advanceToNextBeat = useCallback(() => {
     if (!currentStep) return;
 
-    if (currentBeatIdx < currentStep.beats.length - 1) {
+    if (currentBeatIdx < beats.length - 1) {
       setCurrentBeatIdx((prev) => prev + 1);
       setLifecyclePhase('EXPLAIN');
-    } else if (currentStepIdx < lessonPlan.steps.length - 1) {
+    } else if (currentStepIdx < steps.length - 1) {
       const nextIdx = currentStepIdx + 1;
       setCurrentStepIdx(nextIdx);
       setCurrentBeatIdx(0);
       setLifecyclePhase('EXPLAIN');
-      logTeachingAction('MOVE_FORWARD', lessonPlan.steps[nextIdx].concept.name, 'Mastery gate cleared. Advancing to next concept step.');
+      logTeachingAction('MOVE_FORWARD', steps[nextIdx]?.concept?.name || 'Next Step', 'Mastery gate cleared. Advancing to next concept step.');
     } else {
       // Completed all steps
       setIsPlaying(false);
       setLifecyclePhase('COMPLETED');
       setIsLessonCompleted(true);
-      logTeachingAction('ASSESS', 'Lesson Final Assessment', 'All concept steps completed. Ready for assessment.');
+      logTeachingAction('ASSESS', 'Lesson Final Assessment', 'All concept steps completed. Transitioning to summative assessment.');
       if (onFinishLesson) {
-        onFinishLesson(lessonPlan, learnerProfile);
+        onFinishLesson(activeLessonPlan, learnerProfile);
       }
     }
-  }, [currentStep, currentBeatIdx, currentStepIdx, lessonPlan, learnerProfile, logTeachingAction, onFinishLesson]);
+  }, [currentStep, currentBeatIdx, currentStepIdx, beats, steps, activeLessonPlan, learnerProfile, logTeachingAction, onFinishLesson]);
 
   // Toggle Play / Pause
   const handleTogglePlay = () => {
@@ -258,15 +406,19 @@ export function useLessonOrchestrator({
     }
   };
 
-  // Evaluate Student Checkpoint Answer (AI-Driven)
+  // -------------------------------------------------------------
+  // PHASE 4: QUESTION & USER INPUT INTERCEPTION (Gemini-Evaluated)
+  // -------------------------------------------------------------
   const handleCheckAnswer = async (answerOverride?: string) => {
     const rawAnswer = answerOverride !== undefined ? answerOverride : (selectedOption || freeTextAnswer);
     if (!rawAnswer || !currentBeat?.checkpoint) return;
 
     setIsSubmittingAnswer(true);
+    addConversationTurn('user', rawAnswer, 'QUESTION');
     const cp = currentBeat.checkpoint;
 
     try {
+      // Intercept user input and evaluate with Gemini API
       const res = await fetch('/api/evaluate-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -274,7 +426,7 @@ export function useLessonOrchestrator({
           question: cp.question,
           studentAnswer: rawAnswer,
           correctAnswer: cp.correctAnswer,
-          conceptName: currentStep.concept.name,
+          conceptName: currentStep?.concept?.name || activeLessonPlan.topic,
           knownMisconceptions: cp.knownMisconceptions || []
         })
       });
@@ -283,14 +435,15 @@ export function useLessonOrchestrator({
       setEvaluationResult(data);
 
       if (data.isCorrect) {
-        // Correct Answer!
+        // Correct Answer -> Trigger celebratory feedback & update mastery
         confetti({ particleCount: 55, spread: 60, origin: { y: 0.7 } });
         setActiveMisconception(null);
         setIsAwaitingResponse(false);
         setLifecyclePhase('EXPLAIN');
+        addConversationTurn('assistant', data.correctiveSpeech || 'Correct! Concept verified.', 'EXPLAIN');
 
         // Update profile mastery
-        if (onUpdateProfile) {
+        if (onUpdateProfile && currentStep?.concept?.id) {
           const updatedMastery = {
             ...learnerProfile.conceptMastery,
             [currentStep.concept.id]: 'understood' as const
@@ -300,8 +453,8 @@ export function useLessonOrchestrator({
 
         logTeachingAction(
           'MOVE_FORWARD',
-          currentStep.concept.name,
-          'Student answered correctly. Concept mastery updated to understood.'
+          currentStep?.concept?.name || activeLessonPlan.topic,
+          `Student answered correctly ("${rawAnswer}"). Concept mastery updated.`
         );
 
         // Speak positive reinforcement and advance
@@ -314,7 +467,7 @@ export function useLessonOrchestrator({
           }
         });
       } else {
-        // Incorrect or Misconception!
+        // Incorrect / Misconception -> Phase 5: ADAPT
         setLifecyclePhase('ADAPT');
         const miscObj = {
           category: data.category || 'conceptual_misconception',
@@ -323,11 +476,12 @@ export function useLessonOrchestrator({
           speech: data.correctiveSpeech || 'Let us re-examine this through a practical example.'
         };
         setActiveMisconception(miscObj);
+        addConversationTurn('assistant', miscObj.speech, 'ADAPT');
 
         logTeachingAction(
           'CORRECT_MISCONCEPTION',
-          currentStep.concept.name,
-          `[ADAPT Phase] Diagnosed: ${miscObj.name}. Strategy: ${data.suggestedStrategy || 'analogy'}`,
+          currentStep?.concept?.name || activeLessonPlan.topic,
+          `[ADAPT Phase] Intercepted Misconception: ${miscObj.name}. Strategy: ${data.suggestedStrategy || 'analogy'}`,
           data.suggestedStrategy || 'analogy'
         );
 
@@ -335,7 +489,7 @@ export function useLessonOrchestrator({
         speechService.speak(miscObj.speech, activeLanguage, { rate: speechRate });
       }
     } catch (err) {
-      console.warn('Error evaluating answer, applying local fallback', err);
+      console.warn('[LessonOrchestrator] Error evaluating answer, using local diagnostic fallback', err);
       const isMatch = rawAnswer.toLowerCase().trim().includes(cp.correctAnswer.toLowerCase().trim());
       if (isMatch) {
         setIsAwaitingResponse(false);
@@ -362,16 +516,17 @@ export function useLessonOrchestrator({
     setSelectedOption('');
     setFreeTextAnswer('');
     setLifecyclePhase('EXPLAIN');
-    logTeachingAction('REEXPLAIN', currentStep.concept.name, 'Student reviewed adaptive explanation and resumes lesson.');
+    logTeachingAction('REEXPLAIN', currentStep?.concept?.name || activeLessonPlan.topic, 'Student reviewed adaptive explanation and resumes lesson.');
     advanceToNextBeat();
   };
 
-  // Ask Teacher a Mid-Lesson Question (RAG Grounded AI)
+  // Intercept Mid-Lesson Student Question (RAG Grounded AI via Gemini)
   const handleAskTeacher = async (customQuery?: string) => {
     const queryToUse = customQuery !== undefined ? customQuery : studentQuery;
     if (!queryToUse.trim()) return;
 
     setIsQueryLoading(true);
+    addConversationTurn('user', queryToUse, lifecyclePhase);
     speechService.stop();
 
     try {
@@ -380,25 +535,28 @@ export function useLessonOrchestrator({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentQuestion: queryToUse,
-          currentConcept: currentStep?.concept?.name || lessonPlan.topic,
-          currentTopic: lessonPlan.topic,
+          currentConcept: currentStep?.concept?.name || activeLessonPlan.topic,
+          currentTopic: activeLessonPlan.topic,
           language: activeLanguage,
           teacherPersonality,
-          materialContext: lessonPlan.sourceDocumentName ? `Uploaded document: ${lessonPlan.sourceDocumentName}` : ''
+          materialContext: activeLessonPlan.sourceDocumentName ? `Uploaded document: ${activeLessonPlan.sourceDocumentName}` : ''
         })
       });
 
       const data = await res.json();
       setTeacherAnswer(data.answer);
       setTeacherAnswerMeta({ isLiveAi: data.isLiveAi, modelUsed: data.modelUsed });
+      addConversationTurn('assistant', data.answer, lifecyclePhase);
 
-      logTeachingAction('EXPLAIN', currentStep.concept.name, `Answered student query: "${queryToUse.slice(0, 40)}..."`);
+      logTeachingAction('EXPLAIN', currentStep?.concept?.name || activeLessonPlan.topic, `Answered student query: "${queryToUse.slice(0, 40)}..."`);
 
       // Speak teacher answer
       speechService.speak(data.answer, activeLanguage, { rate: speechRate });
     } catch (err) {
-      console.warn('Error asking teacher:', err);
-      setTeacherAnswer(`In ${currentStep.concept.name}, this principles links directly to our core model. Let us continue exploring to see how it works in practice.`);
+      console.warn('[LessonOrchestrator] Error asking teacher:', err);
+      const fallbackAns = `In ${currentStep?.concept?.name || activeLessonPlan.topic}, this principle links directly to our core model. Let us continue exploring to see how it works in practice.`;
+      setTeacherAnswer(fallbackAns);
+      addConversationTurn('assistant', fallbackAns, lifecyclePhase);
     } finally {
       setIsQueryLoading(false);
     }
@@ -406,19 +564,21 @@ export function useLessonOrchestrator({
 
   // Jump to specific step
   const handleJumpToStep = (stepIdx: number) => {
-    if (stepIdx >= 0 && stepIdx < lessonPlan.steps.length) {
+    if (stepIdx >= 0 && stepIdx < steps.length) {
       setCurrentStepIdx(stepIdx);
       setCurrentBeatIdx(0);
       setLifecyclePhase('EXPLAIN');
       setIsAwaitingResponse(false);
       setActiveMisconception(null);
-      logTeachingAction('MOVE_FORWARD', lessonPlan.steps[stepIdx].concept.name, `Navigated directly to Step ${stepIdx + 1}`);
+      logTeachingAction('MOVE_FORWARD', steps[stepIdx]?.concept?.name || 'Step Jump', `Navigated directly to Step ${stepIdx + 1}`);
     }
   };
 
   return {
-    // Lifecycle State
+    // Dynamic Lesson Plan & Lifecycle
+    activeLessonPlan,
     lifecyclePhase,
+    isOrchestratingLifecycle,
     currentStepIdx,
     currentBeatIdx,
     currentStep,
@@ -426,6 +586,7 @@ export function useLessonOrchestrator({
     activeSpeechText: getActiveSpeechText(currentBeat),
     understandSummary,
     planSummary,
+    conversationHistory,
 
     // Controls & Settings
     isPlaying,
@@ -475,3 +636,4 @@ export function useLessonOrchestrator({
     logTeachingAction
   };
 }
+
