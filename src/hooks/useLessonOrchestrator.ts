@@ -23,6 +23,9 @@ export interface ConversationTurn {
   timestamp: string;
   modelUsed?: string;
   taskComplexity?: 'complex' | 'general' | 'fast';
+  isSearchGrounded?: boolean;
+  groundingSources?: { title: string; uri: string }[];
+  webSearchQueries?: string[];
 }
 
 export interface UseLessonOrchestratorProps {
@@ -89,15 +92,19 @@ export function useLessonOrchestrator({
     };
   });
 
-  // Conversation History state
+  // Conversation History & Search Grounding state
   const [conversationHistory, setConversationHistory] = useState<ConversationTurn[]>([]);
+  const [enableSearchGrounding, setEnableSearchGrounding] = useState<boolean>(true);
 
   const addConversationTurn = useCallback((
     role: 'user' | 'assistant' | 'system',
     content: string,
     phase: LifecyclePhase,
     modelUsed?: string,
-    taskComplexity?: 'complex' | 'general' | 'fast'
+    taskComplexity?: 'complex' | 'general' | 'fast',
+    isSearchGrounded?: boolean,
+    groundingSources?: { title: string; uri: string }[],
+    webSearchQueries?: string[]
   ) => {
     if (!content || !content.trim()) return;
     const turn: ConversationTurn = {
@@ -107,7 +114,10 @@ export function useLessonOrchestrator({
       phase,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       modelUsed,
-      taskComplexity
+      taskComplexity,
+      isSearchGrounded,
+      groundingSources,
+      webSearchQueries
     };
     setConversationHistory((prev) => [...prev, turn]);
   }, []);
@@ -528,8 +538,8 @@ export function useLessonOrchestrator({
     advanceToNextBeat();
   };
 
-  // Intercept Mid-Lesson Student Question (RAG Grounded Multi-Turn AI Tutor via Gemini)
-  const handleAskTeacher = async (customQuery?: string) => {
+  // Intercept Mid-Lesson Student Question (RAG & Google Search Grounded Multi-Turn AI Tutor via Gemini)
+  const handleAskTeacher = async (customQuery?: string, forceSearchGrounding?: boolean) => {
     const queryToUse = customQuery !== undefined ? customQuery : studentQuery;
     if (!queryToUse.trim()) return;
 
@@ -537,6 +547,8 @@ export function useLessonOrchestrator({
     addConversationTurn('user', queryToUse, lifecyclePhase);
     setStudentQuery('');
     speechService.stop();
+
+    const searchGroundingActive = forceSearchGrounding !== undefined ? forceSearchGrounding : enableSearchGrounding;
 
     try {
       const res = await fetch('/api/tutor-chat', {
@@ -549,16 +561,36 @@ export function useLessonOrchestrator({
           currentTopic: activeLessonPlan.topic,
           language: activeLanguage,
           teacherPersonality,
-          educationalLevel: learnerProfile.educationalLevel || 'beginner'
+          educationalLevel: learnerProfile.educationalLevel || 'beginner',
+          enableSearchGrounding: searchGroundingActive
         })
       });
 
       const data = await res.json();
       setTeacherAnswer(data.answer);
-      setTeacherAnswerMeta({ isLiveAi: data.isLiveAi, modelUsed: data.modelUsed });
-      addConversationTurn('assistant', data.answer, lifecyclePhase, data.modelUsed, data.taskComplexity);
+      setTeacherAnswerMeta({
+        isLiveAi: data.isLiveAi,
+        modelUsed: data.modelUsed,
+        isSearchGrounded: data.isSearchGrounded,
+        groundingSources: data.groundingSources,
+        webSearchQueries: data.webSearchQueries
+      });
+      addConversationTurn(
+        'assistant',
+        data.answer,
+        lifecyclePhase,
+        data.modelUsed,
+        data.taskComplexity,
+        data.isSearchGrounded,
+        data.groundingSources,
+        data.webSearchQueries
+      );
 
-      logTeachingAction('EXPLAIN', currentStep?.concept?.name || activeLessonPlan.topic, `AI Tutor (${data.modelUsed || 'Gemini'}) answered query: "${queryToUse.slice(0, 40)}..."`);
+      logTeachingAction(
+        'EXPLAIN',
+        currentStep?.concept?.name || activeLessonPlan.topic,
+        `AI Tutor (${data.modelUsed || 'Gemini'}${data.isSearchGrounded ? ' Grounded in Google Search' : ''}) answered query: "${queryToUse.slice(0, 40)}..."`
+      );
 
       // Speak teacher answer
       speechService.speak(data.answer, activeLanguage, { rate: speechRate });
@@ -615,12 +647,14 @@ export function useLessonOrchestrator({
     activeMisconception,
     showAnalogyAlternative,
 
-    // Mid-Lesson Ask Modal
+    // Mid-Lesson Ask Modal & Search Grounding
     isAskModalOpen,
     studentQuery,
     teacherAnswer,
     teacherAnswerMeta,
     isQueryLoading,
+    enableSearchGrounding,
+    setEnableSearchGrounding,
 
     // Decision Logs & Completion
     decisionLogs,

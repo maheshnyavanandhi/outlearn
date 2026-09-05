@@ -71,13 +71,20 @@ function cleanAndParseJson<T = any>(rawText: string): T {
   }
 }
 
-// Resilient Gemini invoker prioritizing appropriate models according to task complexity
+// Resilient Gemini invoker prioritizing appropriate models according to task complexity with Google Search Grounding
 async function callGemini(
   contents: string | any[],
   isJson: boolean = false,
   taskComplexity: 'complex' | 'general' | 'fast' = 'general',
-  systemInstruction?: string
-): Promise<{ text: string; modelUsed: string }> {
+  systemInstruction?: string,
+  enableSearchGrounding: boolean = false
+): Promise<{
+  text: string;
+  modelUsed: string;
+  groundingSources?: { title: string; uri: string }[];
+  webSearchQueries?: string[];
+  isSearchGrounded?: boolean;
+}> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error('GEMINI_API_KEY is not configured in server environment');
@@ -106,14 +113,44 @@ async function callGemini(
         if (systemInstruction) {
           configObj.systemInstruction = systemInstruction;
         }
+        if (enableSearchGrounding) {
+          configObj.tools = [{ googleSearch: {} }];
+        }
 
         const response = await client.models.generateContent({
           model,
           contents,
           ...(Object.keys(configObj).length > 0 ? { config: configObj } : {})
         });
+
         if (response.text) {
-          return { text: response.text, modelUsed: model };
+          const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+          const webSearchQueries: string[] = groundingMetadata?.webSearchQueries || [];
+          const groundingChunks: any[] = groundingMetadata?.groundingChunks || [];
+          const groundingSources: { title: string; uri: string }[] = [];
+
+          if (Array.isArray(groundingChunks)) {
+            for (const chunk of groundingChunks) {
+              if (chunk?.web?.uri) {
+                groundingSources.push({
+                  title: chunk.web.title || chunk.web.uri,
+                  uri: chunk.web.uri
+                });
+              }
+            }
+          }
+
+          const isSearchGrounded = Boolean(
+            enableSearchGrounding && (webSearchQueries.length > 0 || groundingSources.length > 0)
+          );
+
+          return {
+            text: response.text,
+            modelUsed: model,
+            groundingSources,
+            webSearchQueries,
+            isSearchGrounded
+          };
         }
       } catch (err: any) {
         lastErr = err;
@@ -140,6 +177,18 @@ async function callGemini(
   }
 
   throw lastErr || new Error('All candidate Gemini models failed');
+}
+
+// Heuristic keyword detector for real-time/latest facts requiring search grounding
+function shouldAutoTriggerSearchGrounding(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const keywords = [
+    'latest', 'recent', 'current', 'news', '2025', '2026', 'today', 'update', 'breakthrough',
+    'search', 'ground', 'fact check', 'who is', 'what happened', 'state of the art', 'sota',
+    'discover', 'event', 'trend', 'version', 'release', 'real-time', 'realtime', 'now', 'verified'
+  ];
+  return keywords.some((kw) => lower.includes(kw));
 }
 
 // Health check & backend status endpoint
@@ -310,13 +359,13 @@ Return STRICT RAW JSON matching this exact structure:
     const detectedTime = lower.includes('5 min') || lower.includes('5min') ? '5min' : lower.includes('60 min') || lower.includes('1 hour') ? '60min' : '20min';
     const detectedLanguage = lower.includes('telugu') ? 'te' : lower.includes('hindi') ? 'hi' : lower.includes('hinglish') ? 'hinglish' : 'en';
     
-    let topic = "Fundamental Core Concepts";
+    let topic = (instruction || '').trim() || (fileName ? fileName.replace(/\.[^/.]+$/, '') : "Fundamental Core Concepts");
     if (lower.includes('python') || lower.includes('lab') || lower.includes('programming')) {
       topic = fileName ? fileName.replace(/\.[^/.]+$/, '') : "Python Programming Laboratory";
     } else if (lower.includes('artificial intelligence') || lower.includes('ai')) {
       topic = "Artificial Intelligence: From Fundamentals to Neural Networks";
     } else if (lower.includes('newton')) {
-      topic = "Newton's Laws of Motion (Class 8 Level)";
+      topic = "Newton's Laws of Motion";
     } else if (lower.includes('react')) {
       topic = "React Concepts for Technical Interviews";
     } else if (lower.includes('chapter 4') || lower.includes('ch 4')) {
@@ -356,19 +405,19 @@ Return STRICT RAW JSON matching this exact structure:
 function detectSubjectFromText(topic: string, instruction = '', content = ''): 'physics' | 'dbms' | 'biology' | 'mathematics' | 'programming' {
   const combined = `${topic} ${instruction} ${content}`.toLowerCase();
   
-  if (combined.includes('dbms') || combined.includes('sql') || combined.includes('relational') || combined.includes('database') || combined.includes('schema') || combined.includes('join')) {
+  if (combined.includes('dbms') || combined.includes('sql') || combined.includes('relational') || combined.includes('database') || combined.includes('schema') || combined.includes('join') || combined.includes('table')) {
     return 'dbms';
   }
-  if (combined.includes('biology') || combined.includes('cell') || combined.includes('respiration') || combined.includes('plant') || combined.includes('organ') || combined.includes('gene')) {
+  if (combined.includes('biology') || combined.includes('cell') || combined.includes('respiration') || combined.includes('photosynthesis') || combined.includes('plant') || combined.includes('organ') || combined.includes('gene') || combined.includes('dna') || combined.includes('mitochondria') || combined.includes('atp')) {
     return 'biology';
   }
-  if (combined.includes('math') || combined.includes('algebra') || combined.includes('calculus') || combined.includes('equation') || combined.includes('trigonometry')) {
+  if (combined.includes('math') || combined.includes('algebra') || combined.includes('calculus') || combined.includes('equation') || combined.includes('trigonometry') || combined.includes('derivative') || combined.includes('integral') || combined.includes('matrix')) {
     return 'mathematics';
   }
-  if (combined.includes('ohm') || combined.includes('voltage') || combined.includes('circuit') || combined.includes('physics') || combined.includes('newton') || combined.includes('electricity') || combined.includes('gravity')) {
+  if (combined.includes('ohm') || combined.includes('voltage') || combined.includes('circuit') || combined.includes('physics') || combined.includes('newton') || combined.includes('electricity') || combined.includes('gravity') || combined.includes('force') || combined.includes('motion') || combined.includes('energy') || combined.includes('wave') || combined.includes('chapter 4') || combined.includes('ch 4')) {
     return 'physics';
   }
-  return 'programming'; // default for python, code, react, ai, programming, lab manuals, cs, general
+  return 'programming'; // default for python, code, react, ai, programming, cs, general
 }
 
 // 1. Generate Structured Lesson Plan Endpoint with 8 Determinations & 7 Learner Personalizations
@@ -661,11 +710,25 @@ Provide valid JSON:
   }
 });
 
-// 3. Mid-Lesson Student Interruption & Follow-up Q&A (RAG Grounded)
+// 3. Mid-Lesson Student Interruption & Follow-up Q&A (RAG & Search Grounded)
 app.post('/api/ask-teacher', async (req: Request, res: Response) => {
   try {
-    const { studentQuestion, currentConcept, currentTopic, language = 'en', teacherPersonality = 'mentor', materialContext = '' } = req.body;
+    const {
+      studentQuestion,
+      currentConcept,
+      currentTopic,
+      language = 'en',
+      teacherPersonality = 'mentor',
+      materialContext = '',
+      enableSearchGrounding: userRequestedSearch
+    } = req.body;
     const client = getGeminiClient();
+
+    const isSearchGroundedRequested = Boolean(
+      userRequestedSearch ||
+      shouldAutoTriggerSearchGrounding(studentQuestion) ||
+      shouldAutoTriggerSearchGrounding(currentTopic)
+    );
 
     if (client) {
       const qLower = (studentQuestion || '').toLowerCase();
@@ -683,7 +746,7 @@ Language preference: "${language}".
 ${materialContext ? `SOURCE DOCUMENT RAG CONTEXT:\n"""\n${materialContext.slice(0, 3000)}\n"""` : ''}
 
 STRICT KNOWLEDGE GROUNDING DIRECTIVE:
-1. Base your answer directly on the active concept and uploaded source material.
+1. Base your answer directly on verified, up-to-date factual information and active concept source material.
 2. Minimize unsupported or hallucinated claims.
 3. Keep the response concise, clear, warm, spoken, and easy to understand.
 4. End with a gentle prompt: "Ready to continue our lesson?".
@@ -691,27 +754,39 @@ STRICT KNOWLEDGE GROUNDING DIRECTIVE:
 The student just paused your lesson and asked:
 "${studentQuestion}"`;
 
-      const { text, modelUsed } = await callGemini(prompt, false, taskComplexity);
+      const result = await callGemini(
+        prompt,
+        false,
+        taskComplexity,
+        undefined,
+        isSearchGroundedRequested
+      );
 
       return res.json({
-        answer: text.trim(),
+        answer: result.text.trim(),
         resumePrompt: 'Ready to continue where we paused?',
         isLiveAi: true,
-        modelUsed,
-        taskComplexity
+        modelUsed: result.modelUsed,
+        taskComplexity,
+        isSearchGrounded: result.isSearchGrounded,
+        groundingSources: result.groundingSources || [],
+        webSearchQueries: result.webSearchQueries || []
       });
     }
 
     return res.json({
       answer: `Great question! In ${currentConcept || currentTopic}, this connects directly to the core principle in our textbook material. When you change one parameter, the balance responds immediately. Let us keep this in mind as we proceed.`,
-      resumePrompt: 'Shall we resume our lesson right where we left off?'
+      resumePrompt: 'Shall we resume our lesson right where we left off?',
+      isSearchGrounded: false,
+      groundingSources: [],
+      webSearchQueries: []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 3.1 Multi-turn Chatbot Tutor Endpoint powered by Gemini (gemini-3.1-pro-preview for complex, gemini-3.5-flash for general, gemini-3.1-flash-lite for fast)
+// 3.1 Multi-turn Chatbot Tutor Endpoint powered by Gemini with optional Search Grounding
 app.post('/api/tutor-chat', async (req: Request, res: Response) => {
   try {
     const {
@@ -723,10 +798,18 @@ app.post('/api/tutor-chat', async (req: Request, res: Response) => {
       language = 'en',
       educationalLevel = 'beginner',
       taskComplexity: requestedComplexity,
-      systemRole = ''
+      systemRole = '',
+      enableSearchGrounding: userRequestedSearch
     } = req.body;
 
     const client = getGeminiClient();
+
+    const isSearchGroundedRequested = Boolean(
+      userRequestedSearch ||
+      shouldAutoTriggerSearchGrounding(message) ||
+      shouldAutoTriggerSearchGrounding(currentTopic) ||
+      shouldAutoTriggerSearchGrounding(currentConcept)
+    );
 
     // System instruction defining AI Tutor's role & behavior
     const systemInstruction = systemRole || `You are Dr. Vikram Sharma, a warm, supportive, human-like AI Tutor with the persona of "${teacherPersonality}".
@@ -734,10 +817,11 @@ You are directly chatting 1-on-1 with your student about "${currentTopic}" (Acti
 
 CRITICAL HUMAN CONVERSATION DIRECTIVES:
 1. Respond DIRECTLY, CONVERSATIONALLY, and WARMLY to the student's latest message.
-2. If the student says a simple greeting (e.g. "hey", "hello", "hi", "kaise ho", "namaste"), greet them back naturally like a real teacher (e.g., "Hey there! I'm doing great. How is Chapter 4 going for you so far? What's on your mind?").
-3. Adapt naturally to the student's language (${language} / Hinglish / Hindi / English). If Hinglish is used, reply in friendly Hinglish!
-4. NEVER output internal debug tags, system analysis notes, scope definitions, or rigid canned disclaimers.
-5. Provide clear, concise, step-by-step explanations, analogies, math derivations, or code solutions when asked.`;
+2. If search grounding is enabled, draw upon real-time Google search results to provide accurate, up-to-date facts, statistics, and breakthroughs.
+3. If the student says a simple greeting (e.g. "hey", "hello", "hi", "kaise ho", "namaste"), greet them back naturally like a real teacher.
+4. Adapt naturally to the student's language (${language} / Hinglish / Hindi / English). If Hinglish is used, reply in friendly Hinglish!
+5. NEVER output internal debug tags, system analysis notes, scope definitions, or rigid canned disclaimers.
+6. Provide clear, concise, step-by-step explanations, analogies, math derivations, or code solutions when asked.`;
 
     // Clean & build strictly alternating multi-turn history for Gemini API
     const rawFiltered: { role: string; text: string }[] = [];
@@ -813,14 +897,23 @@ CRITICAL HUMAN CONVERSATION DIRECTIVES:
 
     if (client) {
       const contentsToPass = formattedHistory.length > 0 ? formattedHistory : (message || `Explain ${currentTopic}`);
-      const { text, modelUsed } = await callGemini(contentsToPass, false, determinedComplexity, systemInstruction);
+      const result = await callGemini(
+        contentsToPass,
+        false,
+        determinedComplexity,
+        systemInstruction,
+        isSearchGroundedRequested
+      );
 
       return res.json({
         success: true,
-        answer: text.trim(),
-        modelUsed,
+        answer: result.text.trim(),
+        modelUsed: result.modelUsed,
         taskComplexity: determinedComplexity,
-        isLiveAi: true
+        isLiveAi: true,
+        isSearchGrounded: result.isSearchGrounded,
+        groundingSources: result.groundingSources || [],
+        webSearchQueries: result.webSearchQueries || []
       });
     }
 
@@ -830,11 +923,54 @@ CRITICAL HUMAN CONVERSATION DIRECTIVES:
       isLiveAi: false,
       modelUsed: 'gemini-3.5-flash-simulated',
       taskComplexity: determinedComplexity,
-      answer: `As your AI Tutor in ${currentTopic}, I'm here to answer your queries in every way!\n\n1. **Explanation**: In ${currentTopic}, every concept connects back to underlying mechanics.\n2. **Practical Insight**: Regarding "${message || currentConcept || currentTopic}", breaking it down into smaller steps makes it easy to master.\n3. **Example**: Apply this principle step-by-step in your exercises!\n\nWhat would you like me to clarify or solve next?`
+      answer: `As your AI Tutor in ${currentTopic}, I'm here to answer your queries in every way!\n\n1. **Explanation**: In ${currentTopic}, every concept connects back to underlying mechanics.\n2. **Practical Insight**: Regarding "${message || currentConcept || currentTopic}", breaking it down into smaller steps makes it easy to master.\n3. **Example**: Apply this principle step-by-step in your exercises!\n\nWhat would you like me to clarify or solve next?`,
+      isSearchGrounded: false,
+      groundingSources: [],
+      webSearchQueries: []
     });
   } catch (error: any) {
     console.error('Error in tutor-chat endpoint:', error);
     res.status(500).json({ error: error.message || 'Tutor chat failed' });
+  }
+});
+
+// 3.2 Dedicated Real-Time Google Search Grounded Explanation Endpoint
+app.post('/api/search-grounded-explain', async (req: Request, res: Response) => {
+  try {
+    const { topic, query, educationalLevel = 'beginner', language = 'en' } = req.body;
+    const client = getGeminiClient();
+
+    if (!client) {
+      return res.json({
+        success: false,
+        error: 'Gemini API client not initialized'
+      });
+    }
+
+    const prompt = `You are OutLearn's Real-Time Knowledge Fact-Checker & AI Tutor.
+Search Topic: "${topic}"
+User Query: "${query}"
+Learner Educational Level: "${educationalLevel}"
+Language Preference: "${language}"
+
+Use Google Search Grounding to fetch the latest up-to-date facts, current developments, official figures, or recent events regarding this topic.
+Structure your response into:
+1. **Core Grounded Answer**: Clear, factual synthesis grounded in current search results.
+2. **Key Recent Developments / Facts**: Bullets highlighting verifiable updates.
+3. **Verified Sources**: Summarize why these sources are trustworthy.`;
+
+    const result = await callGemini(prompt, false, 'complex', undefined, true);
+
+    return res.json({
+      success: true,
+      answer: result.text.trim(),
+      modelUsed: result.modelUsed,
+      isSearchGrounded: result.isSearchGrounded || true,
+      groundingSources: result.groundingSources || [],
+      webSearchQueries: result.webSearchQueries || []
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -848,23 +984,16 @@ app.post('/api/generate-roadmap', async (req: Request, res: Response) => {
 
     if (client) {
       const prompt = `You are OutLearn's master educational curriculum architect.
-Generate a structured, 6 to 8-stage sequential learning roadmap graph tailored specifically to the subject/topic: "${topic}".
+Generate a structured, 5 to 8-stage sequential learning roadmap concept graph tailored specifically to the subject/topic: "${topic}".
 Learner Educational Level: ${educationalLevel}
 Learning Objective: "${learningObjective}"
 
-Guidelines:
-- Create 6 to 8 distinct, logical learning stages that build progressively on prerequisites.
-- If the topic is "Machine Learning" or "AI", produce exactly these 8 stages:
-  1. Python Fundamentals
-  2. Mathematics for ML
-  3. Data Processing
-  4. Supervised Learning
-  5. Unsupervised Learning
-  6. Model Evaluation
-  7. Neural Networks
-  8. Advanced Machine Learning
-- For each stage, provide: title, level ("beginner" | "intermediate" | "advanced"), status ("mastered" | "understood" | "developing" | "unknown"), conceptsCount (e.g. 5 to 8), and a short 1-sentence description.
-- Stage 1 and 2 should be 'mastered', Stage 3 'understood', Stage 4 'developing' (current active milestone), and subsequent stages 'unknown'.
+CRITICAL REQUIREMENTS:
+- Extract 5 to 8 distinct, real, topic-specific concepts that build progressively.
+- Use REAL topic-specific stage titles (e.g., for French Revolution: "The Ancien Régime & Three Estates", "Financial Crisis of 1789", "Storming of the Bastille", "Declaration of the Rights of Man", "The Reign of Terror & Robespierre", "Rise of Napoleon").
+- DO NOT use generic template headers like "Foundations of ${topic}", "Core Principles & Models", "Key Analytical Mechanics & Formulas", "Practical Applications & Problem Solving".
+- For ALL stages in a new session, set "status" to "unknown" (or stage 1 to "developing"). DO NOT mark any stage as "mastered" or "understood" by default.
+- Specify real prerequisites between stages where appropriate.
 
 Return STRICT RAW JSON matching this structure:
 {
@@ -876,55 +1005,80 @@ Return STRICT RAW JSON matching this structure:
       "id": string,
       "title": string,
       "level": "beginner" | "intermediate" | "advanced",
-      "status": "mastered" | "understood" | "developing" | "unknown",
+      "status": "unknown" | "developing",
       "conceptsCount": number,
-      "description": string
+      "description": string,
+      "prerequisites": string[]
     }
   ]
 }`;
 
       const { text, modelUsed } = await callGemini(prompt, true);
       const parsed = cleanAndParseJson(text || '{}');
-      if (parsed && parsed.stages && Array.isArray(parsed.stages)) {
+      if (parsed && parsed.stages && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+        // Enforce 0 mastered default on fresh roadmap generation
+        parsed.stages = parsed.stages.map((st: any, idx: number) => ({
+          ...st,
+          status: idx === 0 ? 'developing' : 'unknown'
+        }));
         return res.json({ success: true, roadmap: parsed, isLiveAi: true, modelUsed });
       }
     }
 
-    // Machine Learning custom fallback matching user specification
-    if (lowerTopic.includes('machine learning') || lowerTopic.includes('ml')) {
+    // Dynamic offline synthesis matching specific domains with 0 mastered default
+    if (lowerTopic.includes('french revolution') || lowerTopic.includes('revolution') || lowerTopic.includes('french history')) {
       return res.json({
         success: true,
         roadmap: {
-          title: 'Machine Learning Masterclass Roadmap',
-          subject: 'programming',
-          description: 'Comprehensive 8-stage structured learning path from fundamentals to neural networks and advanced AI.',
+          title: 'French Revolution & 18th-Century European Transformation',
+          subject: 'history',
+          description: '6-stage sequential historical analysis from the Ancien Régime to the rise of Napoleon Bonaparte.',
           stages: [
-            { id: 'ml-1', title: 'Python Fundamentals', level: 'beginner', status: 'mastered', conceptsCount: 6, description: 'Core Python syntax, primitives, functions, and scientific computing tools.' },
-            { id: 'ml-2', title: 'Mathematics for ML', level: 'beginner', status: 'mastered', conceptsCount: 8, description: 'Linear algebra, matrix transformations, multivariable calculus, and probability.' },
-            { id: 'ml-3', title: 'Data Processing', level: 'intermediate', status: 'understood', conceptsCount: 7, description: 'Data cleaning, feature scaling, normalization, and Pandas dataframe operations.' },
-            { id: 'ml-4', title: 'Supervised Learning', level: 'intermediate', status: 'developing', conceptsCount: 10, description: 'Linear/logistic regression, decision trees, random forests, and SVMs.' },
-            { id: 'ml-5', title: 'Unsupervised Learning', level: 'intermediate', status: 'unknown', conceptsCount: 5, description: 'K-Means clustering, hierarchical clustering, and PCA dimensionality reduction.' },
-            { id: 'ml-6', title: 'Model Evaluation', level: 'advanced', status: 'unknown', conceptsCount: 6, description: 'Cross-validation, ROC-AUC curves, confusion matrices, and loss function tuning.' },
-            { id: 'ml-7', title: 'Neural Networks', level: 'advanced', status: 'unknown', conceptsCount: 9, description: 'Perceptrons, backpropagation, activation functions, and PyTorch deep learning.' },
-            { id: 'ml-8', title: 'Advanced Machine Learning', level: 'advanced', status: 'unknown', conceptsCount: 8, description: 'Transformers, LLM architectures, reinforcement learning, and MLOps deployment.' }
+            { id: 'fr-1', title: 'The Ancien Régime & Three Estates System', level: 'beginner', status: 'developing', conceptsCount: 5, description: 'Socio-political division of France into Clergy, Nobility, and the Third Estate.', prerequisites: [] },
+            { id: 'fr-2', title: 'Financial Crisis & Estates-General of 1789', level: 'beginner', status: 'unknown', conceptsCount: 6, description: 'Fiscal bankruptcy under Louis XVI and voting disputes in Assembly.', prerequisites: ['The Ancien Régime & Three Estates System'] },
+            { id: 'fr-3', title: 'Tennis Court Oath & Storming of the Bastille', level: 'beginner', status: 'unknown', conceptsCount: 5, description: 'Formation of National Assembly and the July 14, 1789 popular uprising.', prerequisites: ['Financial Crisis & Estates-General of 1789'] },
+            { id: 'fr-4', title: 'Declaration of Rights of Man & Constitutional Monarchy', level: 'intermediate', status: 'unknown', conceptsCount: 7, description: 'Enlightenment ideals, August Decrees, and feudalism abolition.', prerequisites: ['Tennis Court Oath & Storming of the Bastille'] },
+            { id: 'fr-5', title: 'The Reign of Terror, Jacobins & Robespierre', level: 'intermediate', status: 'unknown', conceptsCount: 6, description: 'Committee of Public Safety, radicalization, and guillotine executions.', prerequisites: ['Declaration of Rights of Man'] },
+            { id: 'fr-6', title: 'Thermidorian Reaction & Rise of Napoleon Bonaparte', level: 'advanced', status: 'unknown', conceptsCount: 7, description: 'The Directory, 1799 Brumaire coup d\'état, and Napoleonic state.', prerequisites: ['The Reign of Terror'] }
           ]
         }
       });
     }
 
+    if (lowerTopic.includes('machine learning') || lowerTopic.includes('ml') || lowerTopic.includes('ai')) {
+      return res.json({
+        success: true,
+        roadmap: {
+          title: 'Machine Learning & Neural Network Architecture Roadmap',
+          subject: 'programming',
+          description: '7-stage structured curriculum progressing from vector linear algebra to transformers and deep learning.',
+          stages: [
+            { id: 'ml-1', title: 'Linear Algebra, Vectors & Matrices for ML', level: 'beginner', status: 'developing', conceptsCount: 6, description: 'Vector spaces, matrix multiplication, dot products, and eigenvalues.', prerequisites: [] },
+            { id: 'ml-2', title: 'Supervised Learning & Linear/Logistic Regression', level: 'beginner', status: 'unknown', conceptsCount: 8, description: 'Loss functions, gradient descent optimization, and decision boundaries.', prerequisites: ['Linear Algebra, Vectors & Matrices for ML'] },
+            { id: 'ml-3', title: 'Classification Algorithms, Decision Trees & Random Forests', level: 'intermediate', status: 'unknown', conceptsCount: 7, description: 'Information entropy, decision trees, ensemble methods, and SVMs.', prerequisites: ['Supervised Learning & Linear/Logistic Regression'] },
+            { id: 'ml-4', title: 'Model Evaluation, Cross-Validation & Loss Tuning', level: 'intermediate', status: 'unknown', conceptsCount: 6, description: 'Overfitting, bias-variance tradeoff, ROC-AUC curves, and metrics.', prerequisites: ['Classification Algorithms'] },
+            { id: 'ml-5', title: 'Unsupervised Learning, K-Means & PCA', level: 'intermediate', status: 'unknown', conceptsCount: 5, description: 'Clustering heuristics, dimensionality reduction, and feature space.', prerequisites: ['Model Evaluation'] },
+            { id: 'ml-6', title: 'Artificial Neural Networks & Backpropagation', level: 'advanced', status: 'unknown', conceptsCount: 9, description: 'Perceptrons, activation functions, chain rule gradients, and PyTorch.', prerequisites: ['Unsupervised Learning'] },
+            { id: 'ml-7', title: 'Deep Learning Architectures, CNNs & Transformers', level: 'advanced', status: 'unknown', conceptsCount: 8, description: 'Convolutional layers, self-attention mechanisms, and LLM foundations.', prerequisites: ['Artificial Neural Networks & Backpropagation'] }
+          ]
+        }
+      });
+    }
+
+    const cleanTopic = topic.replace(/^(chapter\s*\d+:?|module\s*\d+:?)/i, '').trim() || topic;
+
     return res.json({
       success: true,
       roadmap: {
-        title: `${topic} Adaptive Roadmap`,
+        title: `${cleanTopic} Subject Mastery Roadmap`,
         subject: 'general',
-        description: `6-stage structured curriculum created for ${topic}.`,
+        description: `Topic-extracted 5-stage learning path for ${cleanTopic}.`,
         stages: [
-          { id: 'stage-1', title: `Foundations of ${topic}`, level: 'beginner', status: 'mastered', conceptsCount: 5, description: 'Core definitions and initial concepts.' },
-          { id: 'stage-2', title: `Core Principles & Models`, level: 'beginner', status: 'understood', conceptsCount: 6, description: 'Fundamental operational rules and mental models.' },
-          { id: 'stage-3', title: `Analytical Applications & Mechanisms`, level: 'intermediate', status: 'developing', conceptsCount: 7, description: 'Practical calculations and mechanism execution.' },
-          { id: 'stage-4', title: `Problem Solving & Scenarios`, level: 'intermediate', status: 'unknown', conceptsCount: 8, description: 'Applied problem solving in real scenarios.' },
-          { id: 'stage-5', title: `Advanced Diagnostics & Edge Cases`, level: 'advanced', status: 'unknown', conceptsCount: 6, description: 'Edge case resolution and diagnostic reasoning.' },
-          { id: 'stage-6', title: `Mastery Synthesis & Integration`, level: 'advanced', status: 'unknown', conceptsCount: 7, description: 'Comprehensive subject synthesis.' }
+          { id: 'stage-1', title: `${cleanTopic}: Core Definitions & Terminology`, level: 'beginner', status: 'developing', conceptsCount: 5, description: `Essential definitions and foundational mental models of ${cleanTopic}.`, prerequisites: [] },
+          { id: 'stage-2', title: `${cleanTopic}: Operational Mechanics & Components`, level: 'beginner', status: 'unknown', conceptsCount: 6, description: `Structural mechanisms and operational workflows of ${cleanTopic}.`, prerequisites: [`${cleanTopic}: Core Definitions`] },
+          { id: 'stage-3', title: `${cleanTopic}: Governing Laws & Quantitative Rules`, level: 'intermediate', status: 'unknown', conceptsCount: 7, description: `Analytical relationships, equations, and rules in ${cleanTopic}.`, prerequisites: [`${cleanTopic}: Operational Mechanics`] },
+          { id: 'stage-4', title: `${cleanTopic}: Practical Applications & Problem Solving`, level: 'intermediate', status: 'unknown', conceptsCount: 8, description: `Executing practical problem-solving in real-world scenarios.`, prerequisites: [`${cleanTopic}: Governing Laws`] },
+          { id: 'stage-5', title: `${cleanTopic}: Advanced System Synthesis & Case Studies`, level: 'advanced', status: 'unknown', conceptsCount: 7, description: `Diagnostic reasoning, edge cases, and comprehensive synthesis.`, prerequisites: [`${cleanTopic}: Practical Applications`] }
         ]
       }
     });

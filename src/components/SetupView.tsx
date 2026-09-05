@@ -62,6 +62,9 @@ export const SetupView: React.FC<SetupViewProps> = ({
   const [generationPhase, setGenerationPhase] = useState<string>('');
   const [backendStatus, setBackendStatus] = useState<{ connected: boolean; model?: string }>({ connected: true, model: 'Gemini 3.1 Flash' });
 
+  // State for optional session parameter overrides (hidden by default)
+  const [showLessonOverrides, setShowLessonOverrides] = useState(false);
+
   // Sync state if profile prop changes
   React.useEffect(() => {
     if (learnerProfile) {
@@ -210,15 +213,17 @@ export const SetupView: React.FC<SetupViewProps> = ({
 
     // Infer target subject from topic string prompt
     const textForSubject = `${effectiveTopic} ${currentInstr} ${currentFileName || ''}`.toLowerCase();
-    let targetSubject: LessonPlan['subject'] = 'programming';
-    if (textForSubject.includes('dbms') || textForSubject.includes('sql') || textForSubject.includes('relational') || textForSubject.includes('database')) {
+    let targetSubject: LessonPlan['subject'] = 'general';
+    if (textForSubject.includes('dbms') || textForSubject.includes('sql') || textForSubject.includes('relational') || textForSubject.includes('database') || textForSubject.includes('join') || textForSubject.includes('schema')) {
       targetSubject = 'dbms';
-    } else if (textForSubject.includes('biology') || textForSubject.includes('cell') || textForSubject.includes('respiration') || textForSubject.includes('plant')) {
+    } else if (textForSubject.includes('biology') || textForSubject.includes('cell') || textForSubject.includes('respiration') || textForSubject.includes('photosynthesis') || textForSubject.includes('plant') || textForSubject.includes('gene') || textForSubject.includes('dna')) {
       targetSubject = 'biology';
-    } else if (textForSubject.includes('math') || textForSubject.includes('algebra') || textForSubject.includes('calculus') || textForSubject.includes('equation')) {
+    } else if (textForSubject.includes('math') || textForSubject.includes('algebra') || textForSubject.includes('calculus') || textForSubject.includes('equation') || textForSubject.includes('derivative') || textForSubject.includes('trigonometry')) {
       targetSubject = 'mathematics';
-    } else if (textForSubject.includes('ohm') || textForSubject.includes('voltage') || textForSubject.includes('circuit') || textForSubject.includes('physics') || textForSubject.includes('newton') || textForSubject.includes('electricity')) {
+    } else if (textForSubject.includes('ohm') || textForSubject.includes('voltage') || textForSubject.includes('circuit') || textForSubject.includes('physics') || textForSubject.includes('newton') || textForSubject.includes('electricity') || textForSubject.includes('force') || textForSubject.includes('motion')) {
       targetSubject = 'physics';
+    } else if (textForSubject.includes('python') || textForSubject.includes('code') || textForSubject.includes('programming') || textForSubject.includes('react') || textForSubject.includes('javascript') || textForSubject.includes('algorithm')) {
+      targetSubject = 'programming';
     }
 
     try {
@@ -322,7 +327,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
         return {
           id: `dyn-plan-${Date.now()}`,
           topic: plan.topic || effectiveTopic,
-          subject: targetSubject,
+          subject: plan.subject || targetSubject,
           educationalLevel: currentLevel,
           timeBudget: currentTime,
           totalMinutes: currentTime === '5min' ? 5 : currentTime === '20min' ? 20 : 60,
@@ -531,10 +536,6 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 <span className="font-serif font-bold text-base text-[#1C1C1C]">
                   Learner Profile: {learnerProfile?.name || 'Student'}
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-mono font-bold border border-emerald-300 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-700" />
-                  <span>Google OAuth Signed In</span>
-                </span>
               </div>
               <p className="text-xs text-[#666666] font-mono">
                 {learnerProfile?.email || 'student@example.com'}
@@ -551,44 +552,72 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </button>
         </div>
 
-        {/* 7 Active Dimensions Badges */}
+        {/* 7 Active Dimensions Badges (Interactive: Click to edit profile) */}
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center text-[11px] font-sans">
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">1. Level</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Educational Level in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">1. Level</span>
             <span className="font-bold text-[#1C1C1C] capitalize">{learnerProfile?.educationalLevel || 'beginner'}</span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">2. Knowledge</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Prior Knowledge in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">2. Knowledge</span>
             <span className="font-bold text-[#1C1C1C] truncate block" title={learnerProfile?.statedPriorKnowledge}>
               {learnerProfile?.statedPriorKnowledge || 'Basic Algebra'}
             </span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">3. Objective</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Learning Objective in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">3. Objective</span>
             <span className="font-bold text-[#1C1C1C] truncate block" title={learnerProfile?.learningObjective}>
               {learnerProfile?.learningObjective || 'Master Core Exam'}
             </span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">4. Style</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Teacher Personality in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">4. Style</span>
             <span className="font-bold text-[#1C1C1C] capitalize">{learnerProfile?.teacherPersonality || 'mentor'}</span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">5. Language</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Preferred Language in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">5. Language</span>
             <span className="font-bold text-[#1C1C1C] uppercase">{learnerProfile?.preferredLanguage || 'hinglish'}</span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">6. Time</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Time Budget in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">6. Time</span>
             <span className="font-bold text-[#1C1C1C]">{learnerProfile?.timeBudget || '20min'}</span>
-          </div>
+          </button>
 
-          <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/10">
-            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5">7. Depth</span>
+          <button
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/10 hover:border-[#1C1C1C]/30 text-center transition-all cursor-pointer group"
+            title="Click to edit Desired Depth in Profile"
+          >
+            <span className="text-[9px] font-mono font-bold text-[#777777] uppercase block mb-0.5 group-hover:text-[#1C1C1C]">7. Depth</span>
             <span className="font-bold text-[#1C1C1C] truncate block">
               {learnerProfile?.desiredDepth === 'deep_technical_math'
                 ? 'Deep Math'
@@ -596,7 +625,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 ? 'Standard'
                 : 'Conceptual'}
             </span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -836,97 +865,119 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </div>
         </div>
 
-        {/* 4 Learner Adaptation Dimensions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-4 border-t border-[#1C1C1C]/15">
-          {/* Dimension 1: Educational Level */}
-          <div>
-            <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2">
-              1. Educational Level
-            </label>
-            <div className="space-y-1.5">
-              {(['beginner', 'intermediate', 'advanced'] as EducationalLevel[]).map((lvl) => (
-                <button
-                  key={lvl}
-                  onClick={() => setLevel(lvl)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border capitalize transition-all ${
-                    level === lvl
-                      ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
-                      : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
-                  }`}
-                >
-                  {lvl}: {lvl === 'beginner' ? 'Simple analogies' : lvl === 'intermediate' ? 'Technical examples' : 'Deep mathematics'}
-                </button>
-              ))}
-            </div>
+        {/* Session Preference Banner (Pre-filled from Saved Profile) */}
+        <div className="my-5 p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#1C1C1C]/15 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-sans">
+          <div className="flex items-center gap-2 text-[#444444]">
+            <Sliders className="w-4 h-4 text-[#1C1C1C] shrink-0" />
+            <span>
+              <strong>Profile Defaults Applied:</strong> Level: <span className="font-semibold text-[#1C1C1C] capitalize">{level}</span> • Time: <span className="font-semibold text-[#1C1C1C]">{timeBudget}</span> • Language: <span className="font-semibold text-[#1C1C1C] uppercase">{language}</span> • Style: <span className="font-semibold text-[#1C1C1C] capitalize">{personality}</span>
+            </span>
           </div>
-
-          {/* Dimension 2: Available Learning Time */}
-          <div>
-            <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-[#1C1C1C]" />
-              <span>2. Available Time</span>
-            </label>
-            <div className="space-y-1.5">
-              {(['5min', '20min', '60min', '7days'] as TimeBudget[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTimeBudget(t)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-                    timeBudget === t
-                      ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
-                      : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
-                  }`}
-                >
-                  {t === '5min' ? '5 Minutes: Snapshot' : t === '20min' ? '20 Minutes: Structured' : t === '60min' ? '60 Minutes: Masterclass' : '7 Days: Revision Plan'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Dimension 3: Teaching Language */}
-          <div>
-            <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
-              <Globe className="w-3 h-3 text-[#1C1C1C]" />
-              <span>3. Preferred Language</span>
-            </label>
-            <select
-              value={language || 'hi'}
-              onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-              className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name} ({lang.nativeName})
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-[#777777] mt-2 font-sans">
-              Supports Hinglish, Hindi, English, Spanish. Switchable mid-lesson anytime!
-            </p>
-          </div>
-
-          {/* Dimension 4: Teacher Personality */}
-          <div>
-            <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-[#1C1C1C]" />
-              <span>4. Teacher Personality</span>
-            </label>
-            <select
-              value={personality || 'mentor'}
-              onChange={(e) => setPersonality(e.target.value as TeacherPersonality)}
-              className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
-            >
-              {TEACHER_PERSONALITIES.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title} — {p.subtitle}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-[#777777] mt-2 font-sans">
-              Adapts questioning frequency, pace, and explanation analogies.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowLessonOverrides((prev) => !prev)}
+            className="px-3 py-1.5 rounded-xl bg-[#FFFFFF] hover:bg-[#F2EFEB] border border-[#1C1C1C]/20 text-[#1C1C1C] font-semibold text-xs transition-all flex items-center gap-1.5 shrink-0"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>{showLessonOverrides ? 'Hide Lesson Overrides' : 'Adjust for this lesson only'}</span>
+          </button>
         </div>
+
+        {/* Collapsible Session Overrides (Hidden by default, pre-filled from profile) */}
+        {showLessonOverrides && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-4 mb-4 border-t border-[#1C1C1C]/15 animate-in fade-in duration-150">
+            {/* Dimension 1: Educational Level */}
+            <div>
+              <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2">
+                1. Educational Level
+              </label>
+              <div className="space-y-1.5">
+                {(['beginner', 'intermediate', 'advanced'] as EducationalLevel[]).map((lvl) => (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setLevel(lvl)}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border capitalize transition-all ${
+                      level === lvl
+                        ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
+                        : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
+                    }`}
+                  >
+                    {lvl}: {lvl === 'beginner' ? 'Simple analogies' : lvl === 'intermediate' ? 'Technical examples' : 'Deep mathematics'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dimension 2: Available Learning Time */}
+            <div>
+              <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-[#1C1C1C]" />
+                <span>2. Available Time</span>
+              </label>
+              <div className="space-y-1.5">
+                {(['5min', '20min', '60min', '7days'] as TimeBudget[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTimeBudget(t)}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                      timeBudget === t
+                        ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
+                        : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
+                    }`}
+                  >
+                    {t === '5min' ? '5 Minutes: Snapshot' : t === '20min' ? '20 Minutes: Structured' : t === '60min' ? '60 Minutes: Masterclass' : '7 Days: Revision Plan'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dimension 3: Teaching Language */}
+            <div>
+              <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
+                <Globe className="w-3 h-3 text-[#1C1C1C]" />
+                <span>3. Preferred Language</span>
+              </label>
+              <select
+                value={language || 'hi'}
+                onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+                className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.name} ({lang.nativeName})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-[#777777] mt-2 font-sans">
+                Supports Hinglish, Hindi, English, Spanish. Switchable mid-lesson anytime!
+              </p>
+            </div>
+
+            {/* Dimension 4: Teacher Personality */}
+            <div>
+              <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#1C1C1C]" />
+                <span>4. Teacher Personality</span>
+              </label>
+              <select
+                value={personality || 'mentor'}
+                onChange={(e) => setPersonality(e.target.value as TeacherPersonality)}
+                className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer font-sans"
+              >
+                {TEACHER_PERSONALITIES.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title} — {p.subtitle}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-[#777777] mt-2 font-sans">
+                Adapts questioning frequency, pace, and explanation analogies.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Start Teaching Session Button & Generation Progress */}
         <div className="pt-6 border-t border-[#1C1C1C]/15 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -947,7 +998,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             {isGenerating ? (
               <>
                 <span className="w-4 h-4 border-2 border-[#F9F8F6] border-t-transparent rounded-full animate-spin" />
-                <span>Generating with Gemini...</span>
+                <span>Building Lesson Plan...</span>
               </>
             ) : (
               <>

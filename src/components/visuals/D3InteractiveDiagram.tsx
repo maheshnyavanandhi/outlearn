@@ -39,23 +39,27 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // 1. Detect Subject strictly based on subject prop & topic keywords
+  // 1. Detect Subject strictly based on subject prop if provided, or topic/concept keywords
   const detectSubject = (): SubjectType => {
+    const s = (subject || '').toLowerCase();
+    if (s === 'physics' || s === 'dbms' || s === 'biology' || s === 'mathematics' || s === 'programming') {
+      return s as SubjectType;
+    }
     const t = `${topic} ${conceptName || ''}`.toLowerCase();
     
-    if (subject === 'physics' || t.includes('circuit') || t.includes('ohm') || t.includes('voltage') || t.includes('current') || t.includes('electric') || t.includes('potential') || t.includes('physics') || t.includes('force') || t.includes('newton') || t.includes('energy') || t.includes('wave')) {
-      return 'physics';
-    }
-    if (subject === 'dbms' || t.includes('dbms') || t.includes('sql') || t.includes('database') || t.includes('relational') || t.includes('join') || t.includes('table') || t.includes('query')) {
+    if (t.includes('dbms') || t.includes('sql') || t.includes('relational') || t.includes('database') || t.includes('schema') || t.includes('join') || t.includes('table') || t.includes('query')) {
       return 'dbms';
     }
-    if (subject === 'biology' || t.includes('bio') || t.includes('cell') || t.includes('respiration') || t.includes('atp') || t.includes('dna') || t.includes('mitochondria') || t.includes('gene')) {
+    if (t.includes('biology') || t.includes('bio') || t.includes('cell') || t.includes('respiration') || t.includes('photosynthesis') || t.includes('atp') || t.includes('dna') || t.includes('mitochondria') || t.includes('gene') || t.includes('plant') || t.includes('organism')) {
       return 'biology';
     }
-    if (subject === 'mathematics' || t.includes('math') || t.includes('graph') || t.includes('equation') || t.includes('calculus') || t.includes('function') || t.includes('sine') || t.includes('algebra') || t.includes('derivative')) {
+    if (t.includes('math') || t.includes('graph') || t.includes('equation') || t.includes('calculus') || t.includes('function') || t.includes('sine') || t.includes('algebra') || t.includes('derivative') || t.includes('integral') || t.includes('trigonometry')) {
       return 'mathematics';
     }
-    if (subject === 'programming' || t.includes('code') || t.includes('programming') || t.includes('algorithm') || t.includes('python') || t.includes('java') || t.includes('stack') || t.includes('heap') || t.includes('sort')) {
+    if (t.includes('physics') || t.includes('circuit') || t.includes('ohm') || t.includes('voltage') || t.includes('current') || t.includes('electric') || t.includes('potential') || t.includes('force') || t.includes('newton') || t.includes('energy') || t.includes('wave') || t.includes('motion')) {
+      return 'physics';
+    }
+    if (t.includes('code') || t.includes('programming') || t.includes('algorithm') || t.includes('python') || t.includes('java') || t.includes('stack') || t.includes('heap') || t.includes('sort') || t.includes('react')) {
       return 'programming';
     }
     return (subject as SubjectType) || 'general';
@@ -63,29 +67,52 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
 
   const activeSubject = detectSubject();
 
-  // 2. State for subject-specific sub-views
-  // For Physics: 'circuit' | 'vi_curve' | 'potential' | 'concept_map'
-  // For DBMS: 'er_schema' | 'sql_join' | 'btree' | 'concept_map'
-  // For Biology: 'respiration' | 'cell_structure' | 'dna_flow' | 'concept_map'
-  // For Math: 'function_plot' | 'derivative' | 'integral' | 'concept_map'
-  // For CS: 'stack_exec' | 'binary_tree' | 'sorting' | 'concept_map'
-  // For General: 'concept_map'
-
+  // 2. Select sub-view according to specific topic keywords
   const getDefaultSubView = (sub: SubjectType): string => {
-    switch (sub) {
-      case 'physics':
+    const t = `${topic} ${conceptName || ''}`.toLowerCase();
+
+    if (sub === 'physics') {
+      if (t.includes('circuit') || t.includes('voltage') || t.includes('ohm') || t.includes('current') || t.includes('electricity')) {
         return 'circuit';
-      case 'dbms':
-        return 'er_schema';
-      case 'biology':
-        return 'respiration';
-      case 'mathematics':
-        return 'function_plot';
-      case 'programming':
-        return 'stack_exec';
-      default:
-        return 'concept_map';
+      }
+      if (t.includes('potential') || t.includes('charge') || t.includes('work')) {
+        return 'potential';
+      }
+      return 'concept_map';
     }
+
+    if (sub === 'biology') {
+      if (t.includes('respiration') || t.includes('atp') || t.includes('krebs') || t.includes('glycolysis')) {
+        return 'respiration';
+      }
+      return 'concept_map';
+    }
+
+    if (sub === 'dbms') {
+      if (t.includes('join') || t.includes('query')) {
+        return 'sql_join';
+      }
+      if (t.includes('er') || t.includes('schema') || t.includes('entity') || t.includes('relation')) {
+        return 'er_schema';
+      }
+      return 'concept_map';
+    }
+
+    if (sub === 'mathematics') {
+      if (t.includes('plot') || t.includes('function') || t.includes('graph') || t.includes('sine') || t.includes('derivative')) {
+        return 'function_plot';
+      }
+      return 'concept_map';
+    }
+
+    if (sub === 'programming') {
+      if (t.includes('stack') || t.includes('call') || t.includes('memory') || t.includes('recursion')) {
+        return 'stack_exec';
+      }
+      return 'concept_map';
+    }
+
+    return 'concept_map';
   };
 
   const [activeSubView, setActiveSubView] = useState<string>(getDefaultSubView(activeSubject));

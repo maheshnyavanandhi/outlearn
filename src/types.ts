@@ -248,3 +248,16 @@ export interface TeachingActionLogEntry {
   reason: string;
   strategySwitched?: string;
 }
+
+export interface GroundingSource {
+  title: string;
+  uri: string;
+}
+
+export interface SearchGroundedExplanation {
+  answer: string;
+  isSearchGrounded: boolean;
+  groundingSources: GroundingSource[];
+  webSearchQueries: string[];
+  modelUsed?: string;
+}

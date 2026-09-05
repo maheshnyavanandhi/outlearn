@@ -83,10 +83,7 @@ export default function App() {
       timeBudget: '20min',
       teacherPersonality: 'mentor',
       desiredDepth: 'conceptual_overview',
-      conceptMastery: {
-        'c-voltage': 'understood',
-        'c-current': 'developing'
-      },
+      conceptMastery: {},
       recentMisconceptions: [],
       sessionsCompleted: 1,
       dailyStreak: 1
@@ -132,13 +129,15 @@ export default function App() {
     // Determine subject from stage or active plan
     const topicText = `${stageTitle} ${activeLessonPlan?.topic || ''}`.toLowerCase();
     let targetSubject: LessonPlan['subject'] = 'general';
-    if (topicText.includes('physics') || topicText.includes('voltage') || topicText.includes('ohm') || topicText.includes('circuit') || topicText.includes('electricity')) {
+    if (topicText.includes('physics') || topicText.includes('voltage') || topicText.includes('ohm') || topicText.includes('circuit') || topicText.includes('electricity') || topicText.includes('newton') || topicText.includes('force') || topicText.includes('motion')) {
       targetSubject = 'physics';
-    } else if (topicText.includes('dbms') || topicText.includes('sql') || topicText.includes('relational') || topicText.includes('database')) {
+    } else if (topicText.includes('dbms') || topicText.includes('sql') || topicText.includes('relational') || topicText.includes('database') || topicText.includes('join') || topicText.includes('schema')) {
       targetSubject = 'dbms';
-    } else if (topicText.includes('biology') || topicText.includes('cell') || topicText.includes('organelle') || topicText.includes('plant')) {
+    } else if (topicText.includes('biology') || topicText.includes('cell') || topicText.includes('organelle') || topicText.includes('plant') || topicText.includes('respiration') || topicText.includes('photosynthesis') || topicText.includes('gene')) {
       targetSubject = 'biology';
-    } else if (topicText.includes('python') || topicText.includes('pandas') || topicText.includes('machine learning') || topicText.includes('code')) {
+    } else if (topicText.includes('math') || topicText.includes('algebra') || topicText.includes('calculus') || topicText.includes('equation') || topicText.includes('derivative') || topicText.includes('integral')) {
+      targetSubject = 'mathematics';
+    } else if (topicText.includes('python') || topicText.includes('pandas') || topicText.includes('machine learning') || topicText.includes('code') || topicText.includes('react') || topicText.includes('programming')) {
       targetSubject = 'programming';
     }
 
@@ -418,107 +417,18 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: Learner Stats & Profile */}
+          {/* Right: Learner Topic & Profile */}
           <div className="flex items-center gap-2 sm:gap-3 text-xs">
-            {/* Daily Streak Counter with Calendar Popover */}
-            <div className="relative">
-              <button
-                onClick={() => setIsStreakPopoverOpen((prev) => !prev)}
-                className="flex items-center gap-2 bg-[#F2EFEB] hover:bg-[#EAE6DF] border border-[#1C1C1C]/15 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-xs group"
-                title="Daily Streak: Consistent study tracker. Click to view progress."
-                id="daily-streak-btn"
-              >
-                <div className="w-5 h-5 rounded-md bg-[#1C1C1C] flex items-center justify-center text-[#F9F8F6] shadow-xs group-hover:scale-105 transition-transform">
-                  <Flame className="w-3 h-3 text-[#F59E0B] fill-[#F59E0B]" />
-                </div>
-                <div className="text-left">
-                  <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none">
-                    Daily Streak
-                  </span>
-                  <span className="font-bold text-[#1C1C1C] font-serif flex items-center gap-1">
-                    <span>{learnerProfile.dailyStreak ?? 4} Days</span>
-                  </span>
-                </div>
-              </button>
-
-              {/* Streak Popover Dropdown */}
-              {isStreakPopoverOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-[#FFFFFF] border border-[#1C1C1C]/20 rounded-2xl p-4 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[#1C1C1C]">
-                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-[#1C1C1C]/10">
-                    <div className="flex items-center gap-1.5">
-                      <Flame className="w-4 h-4 text-[#F59E0B] fill-[#F59E0B]" />
-                      <h4 className="font-serif font-bold text-sm text-[#1C1C1C]">
-                        {learnerProfile.dailyStreak ?? 4}-Day Study Streak
-                      </h4>
-                    </div>
-                    <button
-                      onClick={() => setIsStreakPopoverOpen(false)}
-                      className="text-[#888888] hover:text-[#1C1C1C] p-0.5 rounded-md"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] text-[#555555] font-serif leading-relaxed mb-3">
-                    Daily study habits reinforce memory retention by <strong className="text-[#1C1C1C]">3.4×</strong>. You're in the <strong className="text-[#1C1C1C]">top 8%</strong> of consistent learners this week!
-                  </p>
-
-                  {/* 7-Day Activity Calendar Matrix */}
-                  <div className="bg-[#F9F8F6] border border-[#1C1C1C]/10 rounded-xl p-2.5 mb-3">
-                    <div className="text-[10px] font-mono text-[#777777] uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>Weekly Consistency</span>
-                      <span className="text-[#1C1C1C] font-bold">4 / 7 Days</span>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 text-center font-mono text-[10px]">
-                      {[
-                        { day: 'M', active: true, label: 'Mon' },
-                        { day: 'T', active: true, label: 'Tue' },
-                        { day: 'W', active: true, label: 'Wed' },
-                        { day: 'T', active: true, label: 'Thu (Today)', today: true },
-                        { day: 'F', active: false, label: 'Fri' },
-                        { day: 'S', active: false, label: 'Sat' },
-                        { day: 'S', active: false, label: 'Sun' }
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex flex-col items-center gap-1">
-                          <div
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] transition-all ${
-                              item.active
-                                ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-xs'
-                                : 'bg-[#F2EFEB] text-[#888888] border border-[#1C1C1C]/10'
-                            } ${item.today ? 'ring-2 ring-amber-500/50' : ''}`}
-                            title={item.label}
-                          >
-                            {item.active ? <Check className="w-3 h-3 stroke-[3]" /> : item.day}
-                          </div>
-                          <span className="text-[9px] text-[#777777]">{item.day}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] bg-[#F2EFEB] rounded-xl px-3 py-2 border border-[#1C1C1C]/10">
-                    <span className="text-[#666666] font-serif italic">Complete a lesson today to reach Day 5</span>
-                    <span className="text-[11px] font-bold font-mono text-[#1C1C1C]">🔥 +1</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
+            {/* Current Active Topic Focus Indicator */}
             <div className="hidden sm:flex items-center gap-2 bg-[#F2EFEB] border border-[#1C1C1C]/15 px-3 py-1.5 rounded-xl">
               <GraduationCap className="w-4 h-4 text-[#1C1C1C]" />
               <div>
-                <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none">Mastered</span>
-                <span className="font-bold text-[#1C1C1C]">{masteredConceptsCount} Concepts</span>
+                <span className="text-[9px] text-[#666666] uppercase font-mono tracking-wider block leading-none">Topic Focus</span>
+                <span className="font-bold text-[#1C1C1C] text-xs max-w-[140px] truncate block">{activeLessonPlan?.topic || 'General Studies'}</span>
               </div>
             </div>
 
-            {/* Live Backend Connection Indicator */}
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#FFFFFF] border border-[#1C1C1C]/15 shadow-2xs font-mono text-[11px]" title="Connected to Express server running Google Gemini 3.1 Flash">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[#1C1C1C] font-semibold">Gemini 3.1 AI Backend</span>
-            </div>
-
-            {/* Student Profile & Personalization Button (OAuth) */}
+            {/* Student Profile & Personalization Button */}
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="flex items-center gap-2 bg-[#F2EFEB] hover:bg-[#EAE6DF] border border-[#1C1C1C]/15 px-2.5 py-1.5 rounded-xl transition-all shadow-2xs group"
@@ -646,6 +556,7 @@ export default function App() {
         {currentView === 'path' && (
           <LearningPathView
             currentTopic={activeLessonPlan?.topic || learnerProfile.learningObjective}
+            activeSubject={activeLessonPlan?.subject}
             learnerProfile={learnerProfile}
             onSelectPathStage={handleSelectPathStage}
             onBackToSetup={() => setCurrentView('setup')}

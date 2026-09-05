@@ -25,6 +25,7 @@ import {
 
 interface LearningPathViewProps {
   currentTopic?: string;
+  activeSubject?: string;
   learnerProfile: LearnerProfile;
   onSelectPathStage: (stageTitle: string, stageDetails?: LearningPathStage) => void;
   onBackToSetup: () => void;
@@ -32,6 +33,7 @@ interface LearningPathViewProps {
 
 export const LearningPathView: React.FC<LearningPathViewProps> = ({
   currentTopic = '',
+  activeSubject,
   learnerProfile,
   onSelectPathStage,
   onBackToSetup
@@ -125,11 +127,8 @@ export const LearningPathView: React.FC<LearningPathViewProps> = ({
         <div className="flex items-center justify-between gap-2 mb-3">
           <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#1C1C1C] flex items-center gap-1.5">
             <Compass className="w-4 h-4 text-[#1C1C1C]" />
-            <span>AI Learning Path Generator (Broad Topic Explorer)</span>
+            <span>Learning Path Generator (Broad Topic Explorer)</span>
           </label>
-          <span className="text-[10px] font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-            Gemini 3.1 AI
-          </span>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -177,6 +176,9 @@ export const LearningPathView: React.FC<LearningPathViewProps> = ({
         <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#F2EFEB] text-[#1C1C1C] border border-[#1C1C1C]/15 text-xs font-mono font-semibold mb-3 shadow-sm">
           <Network className="w-3.5 h-3.5" />
           <span>Structured Curriculum • {totalStages} Sequential Stages</span>
+          <span className="px-2 py-0.5 rounded bg-[#1C1C1C] text-[#F9F8F6] text-[10px] font-bold uppercase tracking-wider font-mono">
+            {activeSubject || roadmap.subject || 'GENERAL'}
+          </span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-serif font-black text-[#1C1C1C] tracking-tight">
           {roadmap.title}
