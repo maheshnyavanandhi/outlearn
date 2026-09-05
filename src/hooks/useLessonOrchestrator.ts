@@ -12,6 +12,7 @@ import {
   LessonStep
 } from '../types';
 import { speechService } from '../services/speechService';
+import { generatePersonalizedOpeningSpeech } from '../utils/personalizedGreeting';
 
 export type LifecyclePhase = 'UNDERSTAND' | 'PLAN' | 'EXPLAIN' | 'QUESTION' | 'ADAPT' | 'COMPLETED';
 
@@ -49,6 +50,15 @@ export function useLessonOrchestrator({
   // Dynamic Lesson Plan State (Can be refined or generated live via Gemini API)
   const [activeLessonPlan, setActiveLessonPlan] = useState<LessonPlan>(() => {
     if (initialLessonPlan) return initialLessonPlan;
+    const personalizedOpening = generatePersonalizedOpeningSpeech({
+      topic: effectiveTopic,
+      learningObjective: learnerProfile.learningObjective,
+      studentInstruction: learnerProfile.learningObjective,
+      teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+      educationalLevel: learnerProfile.educationalLevel || 'beginner',
+      language: learnerProfile.preferredLanguage || 'en'
+    });
+
     return {
       id: `plan-${Date.now()}`,
       topic: effectiveTopic,
@@ -78,7 +88,10 @@ export function useLessonOrchestrator({
               id: 'beat-1',
               conceptId: 'c-1',
               action: 'INTRODUCE',
-              speechEn: `Welcome! Today we will explore ${effectiveTopic}. Let us build an intuitive understanding step by step.`,
+              speechEn: personalizedOpening.speechEn,
+              speechHi: personalizedOpening.speechHi,
+              speechHinglish: personalizedOpening.speechHinglish,
+              speechTe: personalizedOpening.speechTe,
               caption: `Introduction to ${effectiveTopic}`,
               visualCue: {
                 subject: 'physics',

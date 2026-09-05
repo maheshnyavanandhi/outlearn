@@ -1381,7 +1381,7 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
       </div>
 
       {/* Main Canvas View with Aspect Ratio Proportions */}
-      <div ref={containerRef} className="flex-1 w-full aspect-[4/3] sm:aspect-[16/10] min-h-[240px] max-h-[420px] relative my-2 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/10 flex items-center justify-center overflow-hidden">
+      <div ref={containerRef} className="flex-1 w-full aspect-[4/3] sm:aspect-[16/10] min-h-[200px] max-h-[50vh] sm:max-h-[420px] relative my-2 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/10 flex items-center justify-center overflow-hidden">
         <svg ref={svgRef} className="w-full h-full block" />
 
         {selectedNodeInfo && (

@@ -515,6 +515,12 @@ Generate a valid JSON object matching this schema:
   ]
 }
 Requirements:
+- CRITICAL OPENING GREETING RULE (SPEC 7): The speechEn of the very first beat (INTRODUCE action) MUST be a personalized opening line that explicitly references the learner's stated goal / objective ("${learningObjective || studentInstruction || 'mastering ' + topic}") and topic ("${topic}").
+  * DO NOT use generic boilerplate like "Welcome to our session on..." or "Let us explore...".
+  * Speak authentically in the tone of the selected teacher personality ("${preferredTeachingStyle}"):
+    - 'mentor' (Dr. Vikram Sharma): Warm, encouraging, acknowledging their specific goal and connecting it to an intuitive mental model.
+    - 'coach' (Prof. Sarah Jenkins): High-yield, formula-forward, framing their goal around exam patterns and precision.
+    - 'socratic' (Dr. Ananya Sen): Inquisitive, framing their goal as a conceptual puzzle to explore through guided inquiry.
 - Provide 2-3 progressive concepts according to the time budget.
 - For speechTe, provide natural, warm spoken Telugu if language is 'te' or asked.
 - Provide speechHi for Hindi and speechEn for English.
@@ -531,9 +537,26 @@ Return strictly raw valid JSON.`;
       }
     }
 
-    // Pedagogically solid fallback synthesis matching target subject
+    // Pedagogically solid fallback synthesis matching target subject & learner profile
     const defaultSubject = targetSubject;
-    const viewMode = defaultSubject === 'dbms' ? 'dbms_tables' : defaultSubject === 'biology' ? 'cell_explorer' : defaultSubject === 'mathematics' ? 'balance_scale' : defaultSubject === 'physics' ? 'circuit_simulation' : 'code_tracer';
+    const goalClean = (learningObjective || studentInstruction || '').trim() || `master the core principles of ${topic}`;
+    
+    let fallbackSpeechEn = `Hello! I saw that your primary goal today is to ${goalClean}. I'm Dr. Vikram Sharma, and together we'll build a clear, intuitive mental model of ${topic} step-by-step.`;
+    let fallbackSpeechHi = `नमस्ते! मैंने देखा कि आज आपका मुख्य लक्ष्य है: ${goalClean}। आइए ${topic} को चरण-दर-चरण आसानी से समझेंगे।`;
+    let fallbackSpeechHinglish = `Hello! Aapka main goal hai: ${goalClean}. Milkar ${topic} ke visual intuition ko step-by-step samjhenge.`;
+    let fallbackSpeechTe = `నమస్తే! ఈ రోజు మీ ముఖ్యమైన లక్ష్యం: ${goalClean}. మనం కలిసి ${topic} పై స్పష్టమైన అవగాహనను నిర్మిద్దాం.`;
+
+    if (preferredTeachingStyle === 'coach') {
+      fallbackSpeechEn = `Welcome! To reach your target—${goalClean}—we're zeroing in on the highest-yield mechanisms and core formulas of ${topic}. I'm Prof. Sarah Jenkins, and we'll focus directly on the key relationships that define exam mastery.`;
+      fallbackSpeechHi = `नमस्ते! आपके लक्ष्य—${goalClean}—को पूरा करने के लिए, मैं प्रो. सारा जेन्किन्स, सीधे ${topic} के सबसे महत्वपूर्ण सिद्धांतों पर ध्यान केंद्रित करूंगी।`;
+      fallbackSpeechHinglish = `Welcome! Main hoon Prof. Sarah Jenkins. Aapka target hai: ${goalClean}. Hum direct ${topic} ke high-yield formulas aur exam patterns par focus karenge.`;
+      fallbackSpeechTe = `స్వాగతం! మీ లక్ష్యం—${goalClean}—సాధించడానికి, నేను ప్రొఫెసర్ సారా జెంకిన్స్, నేరుగా ${topic} యొక్క అత్యంత కీలకమైన సూత్రాలపై దృష్టి పెడతాను.`;
+    } else if (preferredTeachingStyle === 'socratic') {
+      fallbackSpeechEn = `Hello! You've set out to ${goalClean}. I'm Dr. Ananya Sen, and instead of giving you formulas, let me ask: what actually drives this behavior in ${topic} when conditions change?`;
+      fallbackSpeechHi = `नमस्ते! आपने बताया कि आपका लक्ष्य है: ${goalClean}। मैं हूँ डॉ. अनन्या सेन। आइए ${topic} को एक बुनियादी सवाल से टटोलना शुरू करते हैं।`;
+      fallbackSpeechHinglish = `Hello! Main hoon Dr. Ananya Sen. Aapka goal hai: ${goalClean}. Aaiye ${topic} ko ratne ke bajaye ek fundamental question se discover karte hain.`;
+      fallbackSpeechTe = `నమస్తే! మీ లక్ష్యం: ${goalClean}. నేను డాక్టర్ అనన్య సేన్. ఒక ప్రాథమిక ప్రశ్నతో ${topic} ను అన్వేషించడం ప్రారంభిద్దాం.`;
+    }
 
     return res.json({
       success: true,
@@ -565,10 +588,10 @@ Return strictly raw valid JSON.`;
               {
                 id: 'dyn-b1',
                 action: 'INTRODUCE',
-                speechEn: `Welcome to our focused lesson on ${topic}. Let's first look at the core physical or structural model.`,
-                speechHi: `${topic} के इस विशेष सत्र में आपका स्वागत है। आइए सबसे पहले इसके बुनियादी मॉडल को समझें।`,
-                speechHinglish: `${topic} ke is interactive session me welcome! Pehle iska basic practical model samajhte hain.`,
-                speechTe: `${topic} కి సంబంధించిన ఈ పాఠానికి స్వాగతం! మొదట దీని ప్రాథమిక నమూనాను అర్థం చేసుకుందాం.`,
+                speechEn: fallbackSpeechEn,
+                speechHi: fallbackSpeechHi,
+                speechHinglish: fallbackSpeechHinglish,
+                speechTe: fallbackSpeechTe,
                 caption: `Core Intuition of ${topic}`,
                 pauseForInteraction: false,
                 visualCue: {

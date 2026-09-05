@@ -366,13 +366,15 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             )}
 
             {/* Interactive D3 Diagram Stage */}
-            <D3InteractiveDiagram
-              topic={effectivePlan.topic}
-              subject={currentStep?.concept?.subject || effectivePlan.subject}
-              conceptName={currentStep?.concept?.name}
-              highlightTarget={currentBeat?.visualCue?.highlightTarget}
-              annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
-            />
+            <div className="w-full max-w-full aspect-[4/3] sm:aspect-[16/10] max-h-[50vh] sm:max-h-none overflow-hidden min-w-0 flex flex-col">
+              <D3InteractiveDiagram
+                topic={effectivePlan.topic}
+                subject={currentStep?.concept?.subject || effectivePlan.subject}
+                conceptName={currentStep?.concept?.name}
+                highlightTarget={currentBeat?.visualCue?.highlightTarget}
+                annotation={currentBeat?.visualCue?.annotation || currentBeat?.caption}
+              />
+            </div>
 
             {/* Consolidated Video Player Timeline & Controls Bar */}
             <div className="p-2.5 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/15 flex flex-col gap-2 w-full max-w-full overflow-x-hidden min-w-0">

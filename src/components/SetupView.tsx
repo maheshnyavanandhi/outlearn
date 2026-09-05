@@ -8,14 +8,13 @@ import {
   TeacherDeterminations,
   LearnerProfile
 } from '../types';
-import {
-  SUPPORTED_LANGUAGES,
-  TEACHER_PERSONALITIES
-} from '../data/curriculumData';
+import { SUPPORTED_LANGUAGES, TEACHER_PERSONALITIES } from '../data/curriculumData';
+import { generatePersonalizedOpeningSpeech } from '../utils/personalizedGreeting';
 import {
   BookOpen,
   Upload,
   Clock,
+  Calendar,
   Globe,
   Sparkles,
   Zap,
@@ -226,6 +225,15 @@ export const SetupView: React.FC<SetupViewProps> = ({
       targetSubject = 'programming';
     }
 
+    const personalizedOpening = generatePersonalizedOpeningSpeech({
+      topic: effectiveTopic,
+      learningObjective: options?.learnerProfile?.learningObjective || '',
+      studentInstruction: currentInstr,
+      teacherPersonality: currentPers,
+      educationalLevel: currentLevel,
+      language: currentLang
+    });
+
     try {
       const res = await fetch('/api/generate-lesson-plan', {
         method: 'POST',
@@ -277,14 +285,17 @@ export const SetupView: React.FC<SetupViewProps> = ({
               }))
             } : undefined;
 
+            const isFirstBeat = sIdx === 0 && bIdx === 0;
+            const isGenericOpening = !b.speechEn || b.speechEn.toLowerCase().startsWith('welcome');
+
             return {
               id: b.id || `beat-${stepId}-${bIdx}`,
               conceptId,
               action: b.action || (checkpoint ? 'ASK_CONCEPTUAL' : 'EXPLAIN'),
-              speechEn: b.speechEn || `Let's focus on ${st.conceptName || effectiveTopic}.`,
-              speechHi: b.speechHi,
-              speechHinglish: b.speechHinglish,
-              speechTe: b.speechTe,
+              speechEn: (isFirstBeat && isGenericOpening) ? personalizedOpening.speechEn : (b.speechEn || `Let's focus on ${st.conceptName || effectiveTopic}.`),
+              speechHi: (isFirstBeat && isGenericOpening) ? personalizedOpening.speechHi : b.speechHi,
+              speechHinglish: (isFirstBeat && isGenericOpening) ? personalizedOpening.speechHinglish : b.speechHinglish,
+              speechTe: (isFirstBeat && isGenericOpening) ? personalizedOpening.speechTe : b.speechTe,
               caption: b.caption || `Focus on ${st.conceptName || effectiveTopic}`,
               visualCue,
               pauseForInteraction: Boolean(b.pauseForInteraction || checkpoint),
@@ -296,10 +307,10 @@ export const SetupView: React.FC<SetupViewProps> = ({
               id: `beat-${stepId}-intro`,
               conceptId,
               action: 'INTRODUCE' as const,
-              speechEn: `Welcome to our session on ${st.conceptName || effectiveTopic}. Let us explore the core principles together!`,
-              speechHi: `${st.conceptName || effectiveTopic} के इस सत्र में आपका स्वागत है।`,
-              speechHinglish: `${st.conceptName || effectiveTopic} ke is session me aapka welcome!`,
-              speechTe: `${st.conceptName || effectiveTopic} కి స్వాగతం!`,
+              speechEn: personalizedOpening.speechEn,
+              speechHi: personalizedOpening.speechHi,
+              speechHinglish: personalizedOpening.speechHinglish,
+              speechTe: personalizedOpening.speechTe,
               caption: `Introduction to ${st.conceptName || effectiveTopic}`,
               visualCue: { subject: targetSubject, viewMode: targetSubject === 'physics' ? 'circuit_simulation' : 'code_tracer' },
               pauseForInteraction: false,
@@ -395,10 +406,10 @@ export const SetupView: React.FC<SetupViewProps> = ({
               id: 'beat-1-intro',
               conceptId: 'c-step-1',
               action: 'INTRODUCE',
-              speechEn: `Welcome to our session on ${effectiveTopic}. Let us explore the core principles together!`,
-              speechHi: `${effectiveTopic} के इस सत्र में आपका स्वागत है।`,
-              speechHinglish: `${effectiveTopic} ke is session me aapka welcome!`,
-              speechTe: `${effectiveTopic} కి స్వాగతం!`,
+              speechEn: personalizedOpening.speechEn,
+              speechHi: personalizedOpening.speechHi,
+              speechHinglish: personalizedOpening.speechHinglish,
+              speechTe: personalizedOpening.speechTe,
               caption: `Introduction to ${effectiveTopic}`,
               visualCue: {
                 subject: targetSubject,
@@ -913,24 +924,72 @@ export const SetupView: React.FC<SetupViewProps> = ({
             <div>
               <label className="block text-xs font-mono font-bold text-[#1C1C1C] mb-2 flex items-center gap-1">
                 <Clock className="w-3 h-3 text-[#1C1C1C]" />
-                <span>2. Available Time</span>
+                <span>2. Session Type & Time Budget</span>
               </label>
-              <div className="space-y-1.5">
-                {(['5min', '20min', '60min', '7days'] as TimeBudget[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTimeBudget(t)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-                      timeBudget === t
-                        ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
-                        : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
-                    }`}
-                  >
-                    {t === '5min' ? '5 Minutes: Snapshot' : t === '20min' ? '20 Minutes: Structured' : t === '60min' ? '60 Minutes: Masterclass' : '7 Days: Revision Plan'}
-                  </button>
-                ))}
+
+              {/* Distinct Toggle for Session Type */}
+              <div className="grid grid-cols-2 gap-1 p-1 bg-[#F2EFEB] rounded-xl border border-[#1C1C1C]/10 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (timeBudget === '7days') setTimeBudget('20min');
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    timeBudget !== '7days'
+                      ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
+                      : 'text-[#666666] hover:text-[#1C1C1C]'
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>Single Lesson</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimeBudget('7days')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    timeBudget === '7days'
+                      ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
+                      : 'text-[#666666] hover:text-[#1C1C1C]'
+                  }`}
+                >
+                  <Calendar className="w-3 h-3 text-amber-400" />
+                  <span>Revision Plan</span>
+                </button>
               </div>
+
+              {timeBudget !== '7days' ? (
+                <div>
+                  <span className="text-[10px] font-mono font-semibold text-[#777777] uppercase block mb-1">
+                    Lesson Duration
+                  </span>
+                  <div className="space-y-1.5">
+                    {(['5min', '20min', '60min'] as TimeBudget[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTimeBudget(t)}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                          timeBudget === t
+                            ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm font-semibold'
+                            : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#444444] hover:bg-[#F2EFEB]'
+                        }`}
+                      >
+                        {t === '5min' ? '5 Minutes: Snapshot' : t === '20min' ? '20 Minutes: Structured' : '60 Minutes: Masterclass'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[#1C1C1C]">
+                  <div className="flex items-center gap-1.5 mb-1 font-bold text-xs text-amber-950">
+                    <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>7-Day Curriculum Revision Plan</span>
+                  </div>
+                  <p className="text-[11px] text-[#555555] leading-relaxed">
+                    Multi-day structured curriculum with daily study milestones, spaced review schedules, and mastery tracking.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Dimension 3: Teaching Language */}

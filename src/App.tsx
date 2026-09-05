@@ -9,6 +9,7 @@ import {
   DBMS_RELATIONAL_ALGEBRA_PLAN
 } from './data/curriculumData';
 import { SetupView } from './components/SetupView';
+import { generatePersonalizedOpeningSpeech } from './utils/personalizedGreeting';
 import { TeachingRoom } from './components/TeachingRoom';
 import { AssessmentView } from './components/AssessmentView';
 import { LearningReportView } from './components/LearningReportView';
@@ -166,6 +167,15 @@ export default function App() {
     }
 
     // Dynamic lesson plan fallback
+    const stageOpening = generatePersonalizedOpeningSpeech({
+      topic: stageTitle,
+      learningObjective: learnerProfile.learningObjective,
+      studentInstruction: learnerProfile.learningGoal,
+      teacherPersonality: learnerProfile.teacherPersonality || 'mentor',
+      educationalLevel: learnerProfile.educationalLevel || 'beginner',
+      language: learnerProfile.preferredLanguage || 'hinglish'
+    });
+
     const dynamicPlan: LessonPlan = {
       id: `stage-plan-${Date.now()}`,
       topic: stageTitle,
@@ -205,9 +215,10 @@ export default function App() {
               id: 'beat-1',
               conceptId: `concept-${Date.now()}`,
               action: 'INTRODUCE',
-              speechEn: `Welcome to our session on ${stageTitle}. Today we will master these core principles step-by-step.`,
-              speechHi: `${stageTitle} के इस पाठ में आपका स्वागत है। आज हम इसे चरण-दर-चरण समझेंगे।`,
-              speechHinglish: `Welcome! Aaj hum ${stageTitle} ko step-by-step master karenge with practical examples.`,
+              speechEn: stageOpening.speechEn,
+              speechHi: stageOpening.speechHi,
+              speechHinglish: stageOpening.speechHinglish,
+              speechTe: stageOpening.speechTe,
               caption: `Introduction to ${stageTitle}`,
               visualCue: {
                 subject: targetSubject,

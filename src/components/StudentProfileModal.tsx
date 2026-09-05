@@ -17,6 +17,7 @@ import {
   BookOpen,
   GraduationCap,
   Clock,
+  Calendar,
   Globe,
   Sliders,
   LogOut,
@@ -485,21 +486,66 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </select>
               </div>
 
-              {/* Available Time */}
-              <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#1C1C1C]/15 space-y-2">
+              {/* Available Time & Session Type */}
+              <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#1C1C1C]/15 space-y-3">
                 <label className="text-xs font-mono font-bold text-[#1C1C1C] uppercase block">
-                  6. Available Time
+                  6. Session Type & Time Budget
                 </label>
-                <select
-                  value={timeBudget}
-                  onChange={(e) => setTimeBudget(e.target.value as TimeBudget)}
-                  className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none"
-                >
-                  <option value="5min">5 Minutes (Quick Concept Overview)</option>
-                  <option value="20min">20 Minutes (Standard Balanced Lesson)</option>
-                  <option value="60min">60 Minutes (Deep Analytical Session)</option>
-                  <option value="7days">7-Day Study Masterclass</option>
-                </select>
+
+                {/* Session Type Toggle */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#F2EFEB] rounded-xl border border-[#1C1C1C]/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (timeBudget === '7days') setTimeBudget('20min');
+                    }}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      timeBudget !== '7days'
+                        ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
+                        : 'text-[#666666] hover:text-[#1C1C1C]'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Single Lesson</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeBudget('7days')}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      timeBudget === '7days'
+                        ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
+                        : 'text-[#666666] hover:text-[#1C1C1C]'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                    <span>7-Day Revision Plan</span>
+                  </button>
+                </div>
+
+                {timeBudget !== '7days' ? (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-[#666666] block">Single Lesson Duration:</label>
+                    <select
+                      value={timeBudget}
+                      onChange={(e) => setTimeBudget(e.target.value as TimeBudget)}
+                      className="w-full bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none cursor-pointer"
+                    >
+                      <option value="5min">5 Minutes (Quick Concept Overview)</option>
+                      <option value="20min">20 Minutes (Standard Balanced Lesson)</option>
+                      <option value="60min">60 Minutes (Deep Masterclass Session)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[#1C1C1C]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span className="font-bold text-xs">7-Day Study & Revision Masterclass</span>
+                    </div>
+                    <p className="text-[11px] text-[#555555] leading-relaxed">
+                      Generates a 7-day multi-day learning roadmap with spaced review schedules and daily milestone goals.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

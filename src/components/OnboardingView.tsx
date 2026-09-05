@@ -85,7 +85,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
         <form onSubmit={handleFinish} className="bg-[#FFFFFF] border border-[#1C1C1C]/15 rounded-3xl p-6 sm:p-8 shadow-xl space-y-8">
           
           {/* Section 1: Educational Level & Depth */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="flex items-center gap-2 border-b border-[#1C1C1C]/10 pb-2">
               <GraduationCap className="w-4 h-4 text-[#1C1C1C]" />
               <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-[#1C1C1C]">
@@ -93,82 +93,100 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  id: 'beginner' as EducationalLevel,
-                  title: 'Beginner',
-                  desc: 'Simple analogies, intuitive definitions, core mental models'
-                },
-                {
-                  id: 'intermediate' as EducationalLevel,
-                  title: 'Intermediate',
-                  desc: 'Standard technical terms, operational examples, step-by-step logic'
-                },
-                {
-                  id: 'advanced' as EducationalLevel,
-                  title: 'Advanced',
-                  desc: 'Mathematical formulas, deep proofs, implementation details'
-                }
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setLevel(item.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${
-                    level === item.id
-                      ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-md'
-                      : 'bg-[#FAF9F5] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
-                  }`}
-                >
-                  <div className="font-bold text-sm font-serif mb-1 flex items-center justify-between">
-                    <span>{item.title}</span>
-                    {level === item.id && <Check className="w-4 h-4 text-amber-400" />}
-                  </div>
-                  <p className={`text-xs leading-relaxed ${level === item.id ? 'text-[#D0D0D0]' : 'text-[#666666]'}`}>
-                    {item.desc}
-                  </p>
-                </button>
-              ))}
+            {/* Grid 1: Overall Student Knowledge Level */}
+            <div className="space-y-2">
+              <div>
+                <span className="text-xs font-bold text-[#1C1C1C] block">Student Academic Level</span>
+                <p className="text-[11px] text-[#666666]">
+                  Sets your baseline background so the teacher uses appropriate terminology and concepts.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    id: 'beginner' as EducationalLevel,
+                    title: 'Beginner',
+                    desc: 'Simple analogies, intuitive definitions, core mental models'
+                  },
+                  {
+                    id: 'intermediate' as EducationalLevel,
+                    title: 'Intermediate',
+                    desc: 'Standard technical terms, operational examples, step-by-step logic'
+                  },
+                  {
+                    id: 'advanced' as EducationalLevel,
+                    title: 'Advanced',
+                    desc: 'Mathematical formulas, deep proofs, implementation details'
+                  }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setLevel(item.id)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      level === item.id
+                        ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-md'
+                        : 'bg-[#FAF9F5] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
+                    }`}
+                  >
+                    <div className="font-bold text-xs font-serif mb-1 flex items-center justify-between">
+                      <span>{item.title}</span>
+                      {level === item.id && <Check className="w-4 h-4 text-amber-400" />}
+                    </div>
+                    <p className={`text-[11px] leading-relaxed ${level === item.id ? 'text-[#D0D0D0]' : 'text-[#666666]'}`}>
+                      {item.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              {[
-                {
-                  id: 'conceptual_overview' as DesiredDepth,
-                  title: 'Conceptual Overview',
-                  desc: 'Focus on intuition & analogies'
-                },
-                {
-                  id: 'standard_depth' as DesiredDepth,
-                  title: 'Standard Operational',
-                  desc: 'Balanced theory & practical examples'
-                },
-                {
-                  id: 'deep_technical_math' as DesiredDepth,
-                  title: 'Deep Technical',
-                  desc: 'Formulas, derivations & edge cases'
-                }
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setDepth(item.id)}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    depth === item.id
-                      ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6]'
-                      : 'bg-[#FFFFFF] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#FAF9F5]'
-                  }`}
-                >
-                  <div className="font-semibold text-xs mb-1 flex items-center justify-between">
-                    <span>{item.title}</span>
-                    {depth === item.id && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                  </div>
-                  <p className={`text-[11px] ${depth === item.id ? 'text-[#CCCCCC]' : 'text-[#666666]'}`}>
-                    {item.desc}
-                  </p>
-                </button>
-              ))}
+            {/* Grid 2: Explanation Granularity & Depth */}
+            <div className="space-y-2 pt-2 border-t border-[#1C1C1C]/10">
+              <div>
+                <span className="text-xs font-bold text-[#1C1C1C] block">Lesson Explanation Depth</span>
+                <p className="text-[11px] text-[#666666]">
+                  Sets how granularly each concept is unpacked — independent of your academic level.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    id: 'conceptual_overview' as DesiredDepth,
+                    title: 'Conceptual Overview',
+                    desc: 'Focus on high-level intuition & analogies'
+                  },
+                  {
+                    id: 'standard_depth' as DesiredDepth,
+                    title: 'Standard Operational',
+                    desc: 'Balanced mix of theory & practical examples'
+                  },
+                  {
+                    id: 'deep_technical_math' as DesiredDepth,
+                    title: 'Deep Technical',
+                    desc: 'Exhaustive formulas, derivations & edge cases'
+                  }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setDepth(item.id)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      depth === item.id
+                        ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6]'
+                        : 'bg-[#FFFFFF] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#FAF9F5]'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs mb-1 flex items-center justify-between">
+                      <span>{item.title}</span>
+                      {depth === item.id && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                    </div>
+                    <p className={`text-[11px] ${depth === item.id ? 'text-[#CCCCCC]' : 'text-[#666666]'}`}>
+                      {item.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
