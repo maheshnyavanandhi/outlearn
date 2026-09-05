@@ -71,31 +71,71 @@ function cleanAndParseJson<T = any>(rawText: string): T {
   }
 }
 
-// Resilient Gemini invoker prioritizing gemini-3.8-flash, with fallback models
-async function callGemini(contents: string, isJson: boolean = false): Promise<{ text: string; modelUsed: string }> {
+// Resilient Gemini invoker prioritizing appropriate models according to task complexity
+async function callGemini(
+  contents: string | any[],
+  isJson: boolean = false,
+  taskComplexity: 'complex' | 'general' | 'fast' = 'general',
+  systemInstruction?: string
+): Promise<{ text: string; modelUsed: string }> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error('GEMINI_API_KEY is not configured in server environment');
   }
 
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.1-flash-lite'];
+  // Model selection hierarchy based on official Google Gemini models
+  let candidateModels: string[];
+  if (taskComplexity === 'complex') {
+    candidateModels = ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite'];
+  } else if (taskComplexity === 'fast') {
+    candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'];
+  } else {
+    candidateModels = ['gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'];
+  }
+
   let lastErr: any = null;
 
   for (const model of candidateModels) {
-    try {
-      const response = await client.models.generateContent({
-        model,
-        contents,
-        ...(isJson ? { config: { responseMimeType: 'application/json' } } : {})
-      });
-      if (response.text) {
-        return { text: response.text, modelUsed: model };
+    let retries = 2;
+    while (retries >= 0) {
+      try {
+        const configObj: any = {};
+        if (isJson) {
+          configObj.responseMimeType = 'application/json';
+        }
+        if (systemInstruction) {
+          configObj.systemInstruction = systemInstruction;
+        }
+
+        const response = await client.models.generateContent({
+          model,
+          contents,
+          ...(Object.keys(configObj).length > 0 ? { config: configObj } : {})
+        });
+        if (response.text) {
+          return { text: response.text, modelUsed: model };
+        }
+      } catch (err: any) {
+        lastErr = err;
+        const errStr = String(err?.message || err);
+        const is429 = err?.status === 429 || err?.code === 429 || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded');
+        const is503 = err?.status === 503 || err?.code === 503 || errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('high demand');
+
+        if (is429) {
+          console.warn(`[OutLearn Server] Model ${model} quota exhausted. Immediately switching to next model candidate.`);
+          break;
+        }
+
+        if (is503 && retries > 0) {
+          console.warn(`[OutLearn Server] Model ${model} temporary 503 demand spike. Retrying in ${(3 - retries) * 500}ms... (${retries} retries left)`);
+          retries--;
+          await new Promise((resolve) => setTimeout(resolve, (3 - retries) * 500));
+          continue;
+        }
+
+        console.warn(`[OutLearn Server] Model ${model} unavailable for ${taskComplexity} task, switching to next candidate:`, errStr);
+        break;
       }
-    } catch (err: any) {
-      console.warn(`[OutLearn Server] Model ${model} unavailable, switching to next candidate:`, err?.message || err);
-      lastErr = err;
-      // Brief pause before trying next model
-      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 
@@ -133,8 +173,8 @@ app.get('/api/auth/google/url', (req: Request, res: Response) => {
 
 // Callback handler for OAuth popup
 const handleOAuthCallback = (req: Request, res: Response) => {
-  const name = (req.query.name as string) || 'Mahesh Nyavanandhi';
-  const email = (req.query.email as string) || 'maheshnyavanandhi533@gmail.com';
+  const name = (req.query.name as string) || 'Student Learner';
+  const email = (req.query.email as string) || 'student@example.com';
   const picture = (req.query.picture as string) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
   const sub = (req.query.sub as string) || `google-oauth-sub-${Date.now()}`;
 
@@ -628,6 +668,14 @@ app.post('/api/ask-teacher', async (req: Request, res: Response) => {
     const client = getGeminiClient();
 
     if (client) {
+      const qLower = (studentQuestion || '').toLowerCase();
+      let taskComplexity: 'complex' | 'general' | 'fast' = 'general';
+      if (qLower.includes('code') || qLower.includes('solve') || qLower.includes('derive') || qLower.includes('proof') || qLower.includes('step-by-step') || qLower.includes('equation')) {
+        taskComplexity = 'complex';
+      } else if (qLower.length < 25 || qLower.includes('hint') || qLower.includes('quick')) {
+        taskComplexity = 'fast';
+      }
+
       const prompt = `You are OutLearn, a warm, authoritative human-like teacher with the personality of "${teacherPersonality}".
 Current Lesson Topic: "${currentTopic}".
 Active Concept being taught: "${currentConcept}".
@@ -637,19 +685,20 @@ ${materialContext ? `SOURCE DOCUMENT RAG CONTEXT:\n"""\n${materialContext.slice(
 STRICT KNOWLEDGE GROUNDING DIRECTIVE:
 1. Base your answer directly on the active concept and uploaded source material.
 2. Minimize unsupported or hallucinated claims.
-3. Keep the response concise (2-3 sentences), warm, spoken, and easy to understand.
+3. Keep the response concise, clear, warm, spoken, and easy to understand.
 4. End with a gentle prompt: "Ready to continue our lesson?".
 
 The student just paused your lesson and asked:
 "${studentQuestion}"`;
 
-      const { text, modelUsed } = await callGemini(prompt, false);
+      const { text, modelUsed } = await callGemini(prompt, false, taskComplexity);
 
       return res.json({
         answer: text.trim(),
         resumePrompt: 'Ready to continue where we paused?',
         isLiveAi: true,
-        modelUsed
+        modelUsed,
+        taskComplexity
       });
     }
 
@@ -659,6 +708,133 @@ The student just paused your lesson and asked:
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.1 Multi-turn Chatbot Tutor Endpoint powered by Gemini (gemini-3.1-pro-preview for complex, gemini-3.5-flash for general, gemini-3.1-flash-lite for fast)
+app.post('/api/tutor-chat', async (req: Request, res: Response) => {
+  try {
+    const {
+      messages = [],
+      message = '',
+      currentTopic = 'Curriculum Subject',
+      currentConcept = '',
+      teacherPersonality = 'mentor',
+      language = 'en',
+      educationalLevel = 'beginner',
+      taskComplexity: requestedComplexity,
+      systemRole = ''
+    } = req.body;
+
+    const client = getGeminiClient();
+
+    // System instruction defining AI Tutor's role & behavior
+    const systemInstruction = systemRole || `You are Dr. Vikram Sharma, a warm, supportive, human-like AI Tutor with the persona of "${teacherPersonality}".
+You are directly chatting 1-on-1 with your student about "${currentTopic}" (Active Concept: "${currentConcept || currentTopic}").
+
+CRITICAL HUMAN CONVERSATION DIRECTIVES:
+1. Respond DIRECTLY, CONVERSATIONALLY, and WARMLY to the student's latest message.
+2. If the student says a simple greeting (e.g. "hey", "hello", "hi", "kaise ho", "namaste"), greet them back naturally like a real teacher (e.g., "Hey there! I'm doing great. How is Chapter 4 going for you so far? What's on your mind?").
+3. Adapt naturally to the student's language (${language} / Hinglish / Hindi / English). If Hinglish is used, reply in friendly Hinglish!
+4. NEVER output internal debug tags, system analysis notes, scope definitions, or rigid canned disclaimers.
+5. Provide clear, concise, step-by-step explanations, analogies, math derivations, or code solutions when asked.`;
+
+    // Clean & build strictly alternating multi-turn history for Gemini API
+    const rawFiltered: { role: string; text: string }[] = [];
+
+    if (Array.isArray(messages) && messages.length > 0) {
+      for (const msg of messages) {
+        if (!msg.content || !msg.content.trim()) continue;
+        const text = msg.content.trim();
+
+        // Strip out internal system logs / analysis dumps
+        if (
+          text.startsWith('[Gemini AI Analysis]') ||
+          text.startsWith('Analyzed Learner Profile') ||
+          text.startsWith('Mapped ') ||
+          msg.role === 'system'
+        ) {
+          continue;
+        }
+
+        const role = (msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user';
+        rawFiltered.push({ role, text });
+      }
+    }
+
+    // Append current message if provided
+    if (message && message.trim()) {
+      const cleanMsg = message.trim();
+      if (rawFiltered.length === 0 || rawFiltered[rawFiltered.length - 1].text !== cleanMsg) {
+        rawFiltered.push({ role: 'user', text: cleanMsg });
+      }
+    }
+
+    // Ensure strictly alternating user <-> model turns for Gemini API
+    const formattedHistory: { role: string; parts: { text: string }[] }[] = [];
+    for (const item of rawFiltered) {
+      if (formattedHistory.length === 0) {
+        formattedHistory.push({ role: item.role, parts: [{ text: item.text }] });
+      } else {
+        const last = formattedHistory[formattedHistory.length - 1];
+        if (last.role === item.role) {
+          // Combine same-role turns to avoid invalid consecutive roles
+          last.parts[0].text += `\n${item.text}`;
+        } else {
+          formattedHistory.push({ role: item.role, parts: [{ text: item.text }] });
+        }
+      }
+    }
+
+    // Determine model complexity tier
+    const lastMsgText = (message || (formattedHistory.length > 0 ? formattedHistory[formattedHistory.length - 1].parts[0].text : '')).toLowerCase();
+    let determinedComplexity: 'complex' | 'general' | 'fast' = requestedComplexity || 'general';
+
+    if (!requestedComplexity) {
+      if (
+        lastMsgText.includes('code') ||
+        lastMsgText.includes('solve') ||
+        lastMsgText.includes('derive') ||
+        lastMsgText.includes('explain step by step') ||
+        lastMsgText.includes('proof') ||
+        lastMsgText.includes('complex') ||
+        lastMsgText.includes('architecture') ||
+        lastMsgText.includes('algorithm') ||
+        lastMsgText.includes('deep')
+      ) {
+        determinedComplexity = 'complex';
+      } else if (
+        (lastMsgText.length < 25 && (lastMsgText.includes('hi') || lastMsgText.includes('hello') || lastMsgText.includes('quick') || lastMsgText.includes('hint') || lastMsgText.includes('definition'))) ||
+        lastMsgText.includes('fast')
+      ) {
+        determinedComplexity = 'fast';
+      }
+    }
+
+    if (client) {
+      const contentsToPass = formattedHistory.length > 0 ? formattedHistory : (message || `Explain ${currentTopic}`);
+      const { text, modelUsed } = await callGemini(contentsToPass, false, determinedComplexity, systemInstruction);
+
+      return res.json({
+        success: true,
+        answer: text.trim(),
+        modelUsed,
+        taskComplexity: determinedComplexity,
+        isLiveAi: true
+      });
+    }
+
+    // High quality offline fallback
+    return res.json({
+      success: true,
+      isLiveAi: false,
+      modelUsed: 'gemini-3.5-flash-simulated',
+      taskComplexity: determinedComplexity,
+      answer: `As your AI Tutor in ${currentTopic}, I'm here to answer your queries in every way!\n\n1. **Explanation**: In ${currentTopic}, every concept connects back to underlying mechanics.\n2. **Practical Insight**: Regarding "${message || currentConcept || currentTopic}", breaking it down into smaller steps makes it easy to master.\n3. **Example**: Apply this principle step-by-step in your exercises!\n\nWhat would you like me to clarify or solve next?`
+    });
+  } catch (error: any) {
+    console.error('Error in tutor-chat endpoint:', error);
+    res.status(500).json({ error: error.message || 'Tutor chat failed' });
   }
 });
 

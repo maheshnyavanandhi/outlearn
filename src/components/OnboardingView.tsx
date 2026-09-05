@@ -183,11 +183,17 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {TEACHER_PERSONALITIES.map((p) => (
-                <button
+                <div
                   key={p.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setPersonality(p.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setPersonality(p.id);
+                    }
+                  }}
+                  className={`p-4 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                     personality === p.id
                       ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-md'
                       : 'bg-[#FAF9F5] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
@@ -212,7 +218,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                       {p.description}
                     </p>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>

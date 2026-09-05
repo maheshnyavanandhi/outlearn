@@ -8,7 +8,8 @@ interface TeacherAvatarProps {
   isSpeaking: boolean;
   teacherMood?: 'explaining' | 'listening' | 'thinking' | 'celebrating' | 'questioning';
   speakingText?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  showControls?: boolean;
 }
 
 interface AudioChunk {
@@ -22,7 +23,8 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   isSpeaking,
   teacherMood = 'explaining',
   speakingText = '',
-  size = 'md'
+  size = 'md',
+  showControls = size !== 'sm' && size !== 'xs'
 }) => {
   const [blink, setBlink] = useState(false);
   const [mouthOpen, setMouthOpen] = useState<0 | 1 | 2 | 3>(0);
@@ -250,7 +252,8 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   }, [renderMode, isSpeaking, headTilt, headNod, mouthOpen, blink, config]);
 
   const sizeDimensions = {
-    sm: 'w-24 h-24',
+    xs: 'w-10 h-10',
+    sm: 'w-20 h-20',
     md: 'w-48 h-48 sm:w-56 sm:h-56',
     lg: 'w-64 h-64 sm:w-72 sm:h-72'
   }[size];
@@ -270,26 +273,50 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   return (
     <div className="relative flex flex-col items-center select-none w-full max-w-full overflow-hidden" id="teacher-avatar-container">
       {/* Mode Switcher Pill */}
-      <div className="flex items-center gap-1 mb-2 p-0.5 rounded-lg bg-[#F2EFEB] border border-[#1C1C1C]/15">
-        <button
-          onClick={() => setRenderMode('vector')}
-          className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all duration-200 flex items-center gap-1 ${
-            renderMode === 'vector' ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs' : 'text-[#666666] hover:text-[#1C1C1C]'
-          }`}
-        >
-          <Video className="w-3 h-3" />
-          <span>Vector Avatar</span>
-        </button>
-        <button
-          onClick={() => setRenderMode('canvas3d')}
-          className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all duration-200 flex items-center gap-1 ${
-            renderMode === 'canvas3d' ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs' : 'text-[#666666] hover:text-[#1C1C1C]'
-          }`}
-        >
-          <Eye className="w-3 h-3 text-amber-400" />
-          <span>3D Studio Mesh</span>
-        </button>
-      </div>
+      {showControls && (
+        <div className="flex items-center gap-1 mb-2 p-0.5 rounded-lg bg-[#F2EFEB] border border-[#1C1C1C]/15">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenderMode('vector');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                setRenderMode('vector');
+              }
+            }}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
+              renderMode === 'vector' ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs' : 'text-[#666666] hover:text-[#1C1C1C]'
+            }`}
+          >
+            <Video className="w-3 h-3" />
+            <span>Vector Avatar</span>
+          </div>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenderMode('canvas3d');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                setRenderMode('canvas3d');
+              }
+            }}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
+              renderMode === 'canvas3d' ? 'bg-[#1C1C1C] text-[#F9F8F6] shadow-2xs' : 'text-[#666666] hover:text-[#1C1C1C]'
+            }`}
+          >
+            <Eye className="w-3 h-3 text-amber-400" />
+            <span>3D Studio Mesh</span>
+          </div>
+        </div>
+      )}
 
       {/* Teacher Video Frame */}
       <div className={`relative ${sizeDimensions} rounded-2xl p-1 bg-[#FFFFFF] shadow-md border border-[#1C1C1C]/15 overflow-hidden transition-all duration-300`}>
@@ -504,15 +531,17 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
       </div>
 
       {/* Teacher Name & Pedagogical Mood Status */}
-      <div className="mt-2.5 text-center">
-        <h4 className="text-xs sm:text-sm font-serif font-bold text-[#1C1C1C]">{config.title}</h4>
-        <div className="flex items-center justify-center gap-1.5 mt-1">
-          <span className={`inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded-full border font-mono font-medium transition-all duration-300 ${currentBadge.color}`}>
-            <BadgeIcon className="w-3 h-3" />
-            {currentBadge.text}
-          </span>
+      {size !== 'xs' && (
+        <div className="mt-2 text-center">
+          <h4 className="text-xs font-serif font-bold text-[#1C1C1C]">{config.title}</h4>
+          <div className="flex items-center justify-center gap-1.5 mt-0.5">
+            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-mono font-medium transition-all duration-300 ${currentBadge.color}`}>
+              <BadgeIcon className="w-3 h-3" />
+              {currentBadge.text}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

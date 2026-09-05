@@ -64,17 +64,17 @@ export default function App() {
       console.warn('Failed to load profile from storage', e);
     }
     return {
-      id: 'student-demo-01',
-      name: 'Mahesh Nyavanandhi',
-      email: 'maheshnyavanandhi533@gmail.com',
+      id: 'student-guest-01',
+      name: 'Guest Student',
+      email: 'student@example.com',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
       authInfo: {
-        isLoggedIn: true,
-        name: 'Mahesh Nyavanandhi',
-        email: 'maheshnyavanandhi533@gmail.com',
+        isLoggedIn: false,
+        name: 'Guest Student',
+        email: 'student@example.com',
         picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-        authProvider: 'Google OAuth 2.0',
-        googleSub: 'google-oauth-student-10928374'
+        authProvider: 'Guest Session',
+        googleSub: ''
       },
       educationalLevel: 'beginner',
       statedPriorKnowledge: 'Basic algebra and physical models',
@@ -88,8 +88,8 @@ export default function App() {
         'c-current': 'developing'
       },
       recentMisconceptions: [],
-      sessionsCompleted: 3,
-      dailyStreak: 4
+      sessionsCompleted: 1,
+      dailyStreak: 1
     };
   });
 
@@ -542,7 +542,7 @@ export default function App() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </span>
                 <span className="font-bold text-[#1C1C1C] text-[11px] truncate max-w-[100px] block">
-                  {learnerProfile.name || 'Mahesh N.'}
+                  {learnerProfile.name || 'Student'}
                 </span>
               </div>
             </button>

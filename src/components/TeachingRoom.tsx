@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { MisconceptionFeedbackOverlay } from './MisconceptionFeedbackOverlay';
 import {
   LessonPlan,
   LearnerProfile,
@@ -34,7 +35,9 @@ import {
   Layers,
   HelpCircle,
   Lightbulb,
-  Check
+  Check,
+  Bot,
+  MessageSquare
 } from 'lucide-react';
 
 interface TeachingRoomProps {
@@ -127,6 +130,20 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   const [drawerTab, setDrawerTab] = useState<'logs' | 'transcript'>('logs');
   const [isDeterminationsModalOpen, setIsDeterminationsModalOpen] = useState(false);
   const [visualMode, setVisualMode] = useState<'d3' | 'standard'>('d3');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (isChatOpen) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [conversationHistory, isQueryLoading, isChatOpen]);
+
+  const handleAskTeacherWithWidget = (query?: string) => {
+    setIsChatOpen(true);
+    handleAskTeacher(query);
+  };
 
   // Lifecycle stage progression definition
   const lifecycleStages: { phase: LifecyclePhase; label: string; icon: any }[] = [
@@ -199,6 +216,21 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
         {/* Action Controls & Finish Assessment Button */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* AI Tutor Chat Toggle Button */}
+          <button
+            onClick={() => setIsChatOpen((prev) => !prev)}
+            className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              isChatOpen
+                ? 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]'
+                : 'bg-amber-100/90 hover:bg-amber-200/90 border-amber-300 text-amber-950 shadow-2xs'
+            }`}
+            title="Toggle AI Tutor Chat Widget"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden sm:inline font-mono text-[11px]">AI Tutor Chat</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          </button>
+
           {/* AI Pedagogical Blueprint Modal Trigger */}
           <button
             onClick={() => setIsDeterminationsModalOpen(true)}
@@ -251,70 +283,69 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         <div className="teaching-room-grid w-full max-w-full overflow-hidden min-w-0">
           {/* LEFT COLUMN (Top on mobile < 768px container): AI Avatar Studio & D3 Interactive Visual Canvas */}
           <div className="teaching-room-left flex flex-col gap-4 w-full max-w-full overflow-hidden min-w-0">
-          {/* AI Teacher Avatar Card */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col items-center justify-center relative w-full max-w-full overflow-hidden">
-            <TeacherAvatar
-              personality={teacherPersonality}
-              isSpeaking={isSpeaking}
-              speakingText={activeSpeechText || currentBeat?.speechEn}
-              teacherMood={
-                lifecyclePhase === 'QUESTION'
-                  ? 'listening'
-                  : lifecyclePhase === 'ADAPT'
-                  ? 'questioning'
-                  : isSpeaking
-                  ? 'explaining'
-                  : 'thinking'
-              }
-              size="md"
-            />
-
-            {/* Active Student-Friendly Teaching Phase Badge */}
-            <div className="mt-2 text-center">
-              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 uppercase tracking-wider font-bold inline-flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-amber-600" />
-                <span>
-                  {lifecyclePhase === 'UNDERSTAND'
-                    ? 'Understanding Profile'
-                    : lifecyclePhase === 'PLAN'
-                    ? 'Structuring Lesson'
-                    : lifecyclePhase === 'EXPLAIN'
-                    ? 'Teaching Concept'
-                    : lifecyclePhase === 'QUESTION'
-                    ? 'Interactive Checkpoint'
-                    : 'Growth & Adaptation'}
+          {/* AI Teacher Studio Header Banner */}
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-3 sm:p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 relative w-full max-w-full overflow-hidden">
+            {/* Left: Compact Avatar & Phase Indicator */}
+            <div className="flex items-center gap-3 shrink-0">
+              <TeacherAvatar
+                personality={teacherPersonality}
+                isSpeaking={isSpeaking}
+                speakingText={activeSpeechText || currentBeat?.speechEn}
+                teacherMood={
+                  lifecyclePhase === 'QUESTION'
+                    ? 'listening'
+                    : lifecyclePhase === 'ADAPT'
+                    ? 'questioning'
+                    : isSpeaking
+                    ? 'explaining'
+                    : 'thinking'
+                }
+                size="sm"
+              />
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 uppercase tracking-wider font-bold inline-flex items-center gap-1 w-fit">
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>
+                    {lifecyclePhase === 'UNDERSTAND'
+                      ? 'Understanding Profile'
+                      : lifecyclePhase === 'PLAN'
+                      ? 'Structuring Lesson'
+                      : lifecyclePhase === 'EXPLAIN'
+                      ? 'Teaching Concept'
+                      : lifecyclePhase === 'QUESTION'
+                      ? 'Interactive Checkpoint'
+                      : 'Growth & Adaptation'}
+                  </span>
                 </span>
-              </span>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] font-mono text-[#666666] shrink-0">
+                    Persona:
+                  </label>
+                  <select
+                    value={teacherPersonality || 'mentor'}
+                    onChange={(e) => setTeacherPersonality(e.target.value as TeacherPersonality)}
+                    className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-[11px] rounded-lg px-2 py-0.5 focus:outline-none font-serif max-w-[160px] truncate cursor-pointer"
+                  >
+                    {TEACHER_PERSONALITIES.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {/* Subtitles & Timed Caption Track beneath Avatar */}
+            {/* Right: Subtitles & Timed Caption Track */}
             {showCaptions && (
-              <div className="w-full mt-3 p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15 text-xs text-[#1C1C1C] min-h-[48px] flex flex-wrap sm:flex-nowrap items-center justify-center font-serif italic shadow-2xs gap-2">
+              <div className="flex-1 w-full p-2.5 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15 text-xs text-[#1C1C1C] min-h-[44px] flex items-center gap-2 font-serif italic shadow-2xs">
                 <span className="text-amber-800 bg-amber-100/80 border border-amber-300/60 px-2 py-0.5 rounded font-mono text-[10px] not-italic shrink-0 font-bold flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-600" />
-                  <span>Subtitles</span>
+                  <span>Captions</span>
                 </span>
-                <span className="line-clamp-2 text-[11px] sm:text-xs text-[#1C1C1C] font-serif leading-snug break-words text-center sm:text-left">{activeSpeechText || currentBeat?.speechEn || 'Listening and preparing lesson concepts...'}</span>
+                <span className="line-clamp-2 text-[11px] sm:text-xs text-[#1C1C1C] font-serif leading-snug break-words">{activeSpeechText || currentBeat?.speechEn || 'Listening and preparing lesson concepts...'}</span>
               </div>
             )}
-
-            {/* Teacher Persona Selector Dropdown */}
-            <div className="w-full mt-3 pt-3 border-t border-[#1C1C1C]/10 flex items-center justify-between gap-2">
-              <label className="text-[11px] font-mono text-[#666666] font-medium shrink-0">
-                Teacher Persona:
-              </label>
-              <select
-                value={teacherPersonality || 'mentor'}
-                onChange={(e) => setTeacherPersonality(e.target.value as TeacherPersonality)}
-                className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-serif max-w-[180px] sm:max-w-none truncate"
-              >
-                {TEACHER_PERSONALITIES.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title} ({p.subtitle})
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           {/* D3 Interactive Diagram & Concept Blueprint Visual Canvas */}
@@ -443,244 +474,95 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               </div>
             </div>
           </div>
-        </div>
 
-          {/* RIGHT COLUMN (Bottom on mobile < 768px container): Interactive Teaching Chat Thread */}
-          <div className="teaching-room-right flex flex-col h-full w-full max-w-full overflow-hidden min-w-0">
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 shadow-sm p-3.5 sm:p-4 flex flex-col h-full min-h-[420px] lg:min-h-[600px] w-full max-w-full overflow-hidden">
-            {/* Thread Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3 gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <div>
-                  <h3 className="text-xs sm:text-sm font-serif font-bold text-[#1C1C1C]">
-                    Interactive Teaching Thread
-                  </h3>
-                  <p className="text-[10px] text-[#777777] font-mono hidden sm:block">
-                    Real-time dialogue & checkpoint stream
-                  </p>
+          {/* Inline Interactive Checkpoint on Main Stage */}
+          {(lifecyclePhase === 'QUESTION' || (isAwaitingResponse && currentBeat?.checkpoint)) && !activeMisconception && currentBeat?.checkpoint && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#FFFFFF] border-2 border-[#1C1C1C]/20 shadow-sm animate-in fade-in zoom-in-95 mt-2">
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#1C1C1C]/15 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 flex items-center justify-center font-bold">
+                    <Sparkles className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-serif font-bold text-[#1C1C1C]">
+                      Interactive Checkpoint
+                    </h3>
+                    <p className="text-[10px] text-[#777777] font-mono">Concept: {currentStep?.concept?.name || effectivePlan.topic}</p>
+                  </div>
                 </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300/60 font-bold uppercase">
+                  Diagnostic Question
+                </span>
               </div>
 
-              {/* Concept Progression Pills */}
-              <div className="flex items-center gap-1 max-w-[130px] sm:max-w-[200px] overflow-x-auto pb-0.5">
-                {steps.map((step, idx) => (
-                  <button
-                    key={step.id || idx}
-                    onClick={() => handleJumpToStep(idx)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-medium transition-all shrink-0 ${
-                      idx === currentStepIdx
-                        ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-2xs'
-                        : 'bg-[#F2EFEB] text-[#666666] hover:bg-[#E6E3DB]'
-                    }`}
-                    title={step.concept.name}
-                  >
-                    Step {idx + 1}
-                  </button>
-                ))}
+              <div className="text-xs sm:text-sm font-serif font-bold text-[#1C1C1C] mb-3 leading-snug">
+                {activeLanguage === 'hi' && currentBeat.checkpoint.questionHindi
+                  ? currentBeat.checkpoint.questionHindi
+                  : activeLanguage === 'hinglish' && currentBeat.checkpoint.questionHinglish
+                  ? currentBeat.checkpoint.questionHinglish
+                  : currentBeat.checkpoint.question}
               </div>
-            </div>
 
-            {/* Conversation Stream Scroll Area */}
-            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[420px] sm:max-h-[500px] lg:max-h-[580px] min-h-[250px] sm:min-h-[350px]">
-              {conversationHistory.length === 0 ? (
-                <div className="p-6 text-center text-[#888888] font-serif italic text-xs">
-                  Initiating lesson sequence with {TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Teacher'}...
+              {/* Options */}
+              {currentBeat.checkpoint.options && currentBeat.checkpoint.options.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                  {currentBeat.checkpoint.options.map((opt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedOption(opt)}
+                      className={`text-left px-3.5 py-2.5 rounded-xl border text-xs font-medium transition-all flex items-center justify-between ${
+                        selectedOption === opt
+                          ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-sm'
+                          : 'bg-[#FAF8F5] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
+                      }`}
+                    >
+                      <span>{opt}</span>
+                      {selectedOption === opt && <CheckCircle2 className="w-4 h-4 text-[#F9F8F6] shrink-0" />}
+                    </button>
+                  ))}
                 </div>
               ) : (
-                conversationHistory.map((msg) => {
-                  const isUser = msg.role === 'user';
-                  const isSystem = msg.role === 'system';
-
-                  if (isSystem) {
-                    return (
-                      <div key={msg.id} className="text-center my-1.5">
-                        <span className="text-[10px] font-mono text-[#777777] bg-[#F2EFEB] px-2.5 py-1 rounded-full border border-[#1C1C1C]/10 inline-flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-amber-600" />
-                          <span>{msg.content}</span>
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
-                    >
-                      {/* Avatar Icon */}
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold border ${
-                        isUser
-                          ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]'
-                      }`}>
-                        {isUser ? 'S' : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
-                      </div>
-
-                      {/* Chat Bubble */}
-                      <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs ${
-                        isUser
-                          ? 'bg-[#1C1C1C] text-[#F9F8F6] rounded-tr-xs shadow-2xs'
-                          : 'bg-[#FAF8F5] text-[#1C1C1C] border border-[#1C1C1C]/15 rounded-tl-xs shadow-2xs'
-                      }`}>
-                        <div className={`flex items-center justify-between gap-2 mb-1 font-mono text-[10px] ${isUser ? 'text-amber-200' : 'text-[#777777]'}`}>
-                          <span className="font-bold">{isUser ? 'Learner' : TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Teacher'}</span>
-                          <span>{msg.timestamp}</span>
-                        </div>
-                        <p className="font-serif leading-relaxed whitespace-pre-wrap text-[12px]">{msg.content}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              {/* Embedded Interactive Checkpoint Card in Chat Stream */}
-              {(lifecyclePhase === 'QUESTION' || (isAwaitingResponse && currentBeat?.checkpoint)) && !activeMisconception && currentBeat?.checkpoint && (
-                <div className="p-4 rounded-2xl bg-[#FAF8F5] border-2 border-[#1C1C1C]/20 shadow-md my-2 animate-in fade-in zoom-in-95">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]/15 mb-2.5">
-                    <div className="flex items-center gap-1.5 text-xs font-serif font-bold text-[#1C1C1C]">
-                      <Sparkles className="w-4 h-4 text-amber-600" />
-                      <span>Interactive Checkpoint</span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300/60 font-bold">
-                      Diagnostic Question
-                    </span>
-                  </div>
-
-                  <div className="text-xs font-serif font-bold text-[#1C1C1C] mb-3">
-                    {activeLanguage === 'hi' && currentBeat.checkpoint.questionHindi
-                      ? currentBeat.checkpoint.questionHindi
-                      : activeLanguage === 'hinglish' && currentBeat.checkpoint.questionHinglish
-                      ? currentBeat.checkpoint.questionHinglish
-                      : currentBeat.checkpoint.question}
-                  </div>
-
-                  {/* Multiple Choice Options */}
-                  {currentBeat.checkpoint.options && currentBeat.checkpoint.options.length > 0 ? (
-                    <div className="space-y-1.5 mb-3">
-                      {currentBeat.checkpoint.options.map((opt, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedOption(opt)}
-                          className={`w-full text-left px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between ${
-                            selectedOption === opt
-                              ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6] shadow-2xs'
-                              : 'bg-[#FFFFFF] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
-                          }`}
-                        >
-                          <span>{opt}</span>
-                          {selectedOption === opt && <CheckCircle2 className="w-3.5 h-3.5 text-[#F9F8F6] shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mb-3">
-                      <textarea
-                        value={freeTextAnswer || ''}
-                        onChange={(e) => setFreeTextAnswer(e.target.value)}
-                        placeholder="Type or speak your answer..."
-                        className="w-full h-20 bg-[#FFFFFF] border border-[#1C1C1C]/20 rounded-xl p-2.5 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/10">
-                    <VoiceMicButton
-                      language={activeLanguage}
-                      size="sm"
-                      label="Voice Answer"
-                      onTranscriptChange={(text) => setFreeTextAnswer(text)}
-                    />
-                    <button
-                      onClick={() => handleCheckAnswer()}
-                      disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all"
-                    >
-                      {isSubmittingAnswer ? 'Evaluating...' : 'Submit Response'}
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                <div className="mb-3 space-y-2">
+                  <textarea
+                    value={freeTextAnswer || ''}
+                    onChange={(e) => setFreeTextAnswer(e.target.value)}
+                    placeholder="Type or dictate your explanation..."
+                    className="w-full h-20 bg-[#FAF8F5] border border-[#1C1C1C]/20 rounded-xl p-2.5 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C]"
+                  />
                 </div>
               )}
 
-              {/* Embedded Growth & Adaptation Card in Chat Stream */}
-              {(lifecyclePhase === 'ADAPT' || activeMisconception) && activeMisconception && (
-                <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-300/80 shadow-md my-2 animate-in fade-in zoom-in-95 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1">
-                      <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Growth Insight • Micro-Correction</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-200/60 text-amber-950 font-bold">
-                      {activeMisconception.category || 'Intuition Trap'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-serif font-bold text-[#1C1C1C] text-xs mb-1">
-                      {activeMisconception.name}
-                    </h4>
-                    <p className="text-xs text-[#555555] font-sans leading-relaxed mb-2">
-                      {activeMisconception.diagnosis}
-                    </p>
-                    <p className="text-xs text-[#1C1C1C] font-serif leading-relaxed italic bg-[#FFFFFF] p-2.5 rounded-xl border border-amber-200/80">
-                      "{activeMisconception.speech}"
-                    </p>
-                  </div>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      onClick={handleContinueFromMisconception}
-                      className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all"
-                    >
-                      <span>Understood! Resume Lesson</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Thread Interactive Input & Action Bar */}
-            <div className="pt-3 border-t border-[#1C1C1C]/15 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={studentQuery || ''}
-                  onChange={(e) => setStudentQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAskTeacher()}
-                  placeholder="Ask a question or type your answer..."
-                  className="flex-1 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-sans"
-                />
+              <div className="flex items-center justify-between pt-2 border-t border-[#1C1C1C]/10">
                 <VoiceMicButton
                   language={activeLanguage}
-                  size="md"
-                  label=""
-                  onTranscriptChange={(text) => setStudentQuery(text)}
+                  size="sm"
+                  label="Voice Answer"
+                  onTranscriptChange={(text) => setFreeTextAnswer(text)}
                 />
                 <button
-                  onClick={() => handleAskTeacher()}
-                  disabled={isQueryLoading || !studentQuery.trim()}
-                  className="px-3.5 py-2 bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] rounded-xl text-xs font-bold flex items-center gap-1 shadow-2xs transition-all"
-                  title="Ask teacher question"
+                  onClick={() => handleCheckAnswer()}
+                  disabled={(!selectedOption && !freeTextAnswer.trim()) || isSubmittingAnswer}
+                  className="px-4 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] text-xs font-bold shadow flex items-center gap-1.5 transition-all"
                 >
-                  {isQueryLoading ? 'Thinking...' : <Send className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-
-              {/* Quick Action Hints */}
-              <div className="flex items-center justify-between text-[10px] text-[#777777] font-mono px-1">
-                <span>Ask anything — OutLearn maintains full lesson context</span>
-                <button
-                  onClick={() => setIsAskModalOpen(true)}
-                  className="text-[#1C1C1C] hover:underline font-bold flex items-center gap-1"
-                >
-                  <MessageCircleQuestion className="w-3 h-3" />
-                  <span>Interrupt Lesson</span>
+                  {isSubmittingAnswer ? 'Evaluating...' : 'Submit Response'}
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Visual Animated Feedback Overlay for Misconceptions */}
+          {activeMisconception && (
+            <MisconceptionFeedbackOverlay
+              misconception={activeMisconception}
+              onContinue={handleContinueFromMisconception}
+              onAskForClarification={(prefilled) => {
+                setStudentQuery(prefilled);
+                handleAskTeacherWithWidget(prefilled);
+              }}
+              teacherTitle={TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Dr. Vikram Sharma'}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1197,6 +1079,172 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           </div>
         </div>
       )}
+      {/* Floating AI Tutor Toggle Bubble & Chat Popover Widget */}
+      <div className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 flex flex-col items-end pointer-events-auto">
+        {/* Floating Chat Window Popover */}
+        {isChatOpen && (
+          <div className="mb-3 w-[360px] sm:w-[390px] max-w-[calc(100vw-2.5rem)] h-[480px] max-h-[calc(100vh-7rem)] bg-[#FFFFFF] border border-[#1C1C1C]/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            {/* Popover Header */}
+            <div className="bg-[#1C1C1C] text-[#F9F8F6] px-3.5 py-2.5 flex items-center justify-between border-b border-amber-400/30 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="relative w-8 h-8 rounded-full bg-amber-100 text-amber-950 border border-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#1C1C1C]" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-xs sm:text-sm leading-tight text-[#F9F8F6]">
+                    {TEACHER_PERSONALITIES.find((p) => p.id === teacherPersonality)?.title || 'Dr. Vikram Sharma'}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-300 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>AI Tutor Active • Step {currentStepIdx + 1}/{steps.length || 1}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-[#FFFFFF]/10 text-[#F9F8F6] transition-colors"
+                  title="Close AI Tutor Chat"
+                >
+                  <X className="w-4 h-4 text-amber-300" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Conversation Message Stream */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 space-y-3 bg-[#F9F8F6]">
+              {conversationHistory.length === 0 ? (
+                <div className="p-6 text-center text-[#888888] font-serif italic text-xs">
+                  Hi! I'm {TEACHER_PERSONALITIES.find((p) => p.id === teacherPersonality)?.title || 'Dr. Vikram Sharma'}. Ask me any question or request an analogy for {effectivePlan.topic}!
+                </div>
+              ) : (
+                conversationHistory
+                  .filter((msg) => msg.role !== 'system' && !msg.content?.startsWith('[Gemini AI Analysis]') && !msg.content?.startsWith('Analyzed Learner Profile'))
+                  .map((msg) => {
+                    const isUser = msg.role === 'user';
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                      >
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold border ${
+                          isUser
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-[#1C1C1C] text-[#F9F8F6] border-[#1C1C1C]'
+                        }`}>
+                          {isUser ? 'S' : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
+                        </div>
+
+                        <div className={`max-w-[85%] rounded-2xl p-3 text-xs ${
+                          isUser
+                            ? 'bg-[#1C1C1C] text-[#F9F8F6] rounded-tr-xs shadow-2xs'
+                            : 'bg-[#FFFFFF] text-[#1C1C1C] border border-[#1C1C1C]/15 rounded-tl-xs shadow-2xs'
+                        }`}>
+                          <div className={`flex items-center justify-between gap-2 mb-1 font-mono text-[10px] ${isUser ? 'text-amber-200' : 'text-[#777777]'}`}>
+                            <span className="font-bold">
+                              {isUser ? (learnerProfile?.name || 'Learner') : (TEACHER_PERSONALITIES.find((p) => p.id === teacherPersonality)?.title || 'Dr. Vikram Sharma')}
+                            </span>
+                            <span>{msg.timestamp}</span>
+                          </div>
+                          <p className="font-serif leading-relaxed whitespace-pre-wrap text-[12px]">{msg.content}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+
+              {/* Typing indicator when Gemini is reasoning */}
+              {isQueryLoading && (
+                <div className="flex gap-2 flex-row my-2 animate-pulse">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[#1C1C1C] text-[#F9F8F6] shrink-0 text-xs font-bold border border-[#1C1C1C]">
+                    <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
+                  </div>
+                  <div className="bg-[#FFFFFF] text-[#1C1C1C] border border-[#1C1C1C]/15 rounded-xl rounded-tl-xs p-2.5 text-xs flex items-center gap-2">
+                    <span className="font-serif italic text-[#777777]">Thinking & formulating response...</span>
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#1C1C1C] animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#1C1C1C] animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#1C1C1C] animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Quick Suggestions Chips & Input Bar */}
+            <div className="p-3 bg-[#FFFFFF] border-t border-[#1C1C1C]/15 flex flex-col gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-mono">
+                <button
+                  onClick={() => handleAskTeacherWithWidget("Can you explain this with a real-life analogy?")}
+                  className="px-2 py-0.5 rounded-full bg-[#F2EFEB] hover:bg-amber-100 border border-[#1C1C1C]/15 text-[#1C1C1C] whitespace-nowrap transition-colors"
+                >
+                  💡 Give Analogy
+                </button>
+                <button
+                  onClick={() => handleAskTeacherWithWidget("Can you give me a step-by-step example problem?")}
+                  className="px-2 py-0.5 rounded-full bg-[#F2EFEB] hover:bg-amber-100 border border-[#1C1C1C]/15 text-[#1C1C1C] whitespace-nowrap transition-colors"
+                >
+                  📝 Example Problem
+                </button>
+                <button
+                  onClick={() => handleAskTeacherWithWidget("Explain this in simpler terms.")}
+                  className="px-2 py-0.5 rounded-full bg-[#F2EFEB] hover:bg-amber-100 border border-[#1C1C1C]/15 text-[#1C1C1C] whitespace-nowrap transition-colors"
+                >
+                  🔍 Simplify
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={studentQuery || ''}
+                  onChange={(e) => setStudentQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAskTeacherWithWidget()}
+                  placeholder="Ask Dr. Sharma a question..."
+                  className="flex-1 bg-[#F9F8F6] border border-[#1C1C1C]/20 rounded-xl px-3 py-2 text-xs text-[#1C1C1C] focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-sans"
+                />
+                <VoiceMicButton
+                  language={activeLanguage}
+                  size="sm"
+                  label=""
+                  onTranscriptChange={(text) => setStudentQuery(text)}
+                />
+                <button
+                  onClick={() => handleAskTeacherWithWidget()}
+                  disabled={isQueryLoading || !studentQuery.trim()}
+                  className="px-3 py-2 bg-[#1C1C1C] hover:bg-[#2C2C2C] disabled:opacity-40 text-[#F9F8F6] rounded-xl text-xs font-bold flex items-center justify-center shadow-2xs transition-all"
+                >
+                  {isQueryLoading ? '...' : <Send className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Floating AI Tutor FAB Button */}
+        <button
+          type="button"
+          onClick={() => setIsChatOpen((prev) => !prev)}
+          className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full shadow-2xl transition-all duration-300 border-2 flex items-center justify-center transform hover:scale-105 active:scale-95 group ${
+            isChatOpen
+              ? 'bg-[#1C1C1C] text-[#F9F8F6] border-amber-400 ring-4 ring-amber-400/20'
+              : 'bg-[#1C1C1C] text-[#F9F8F6] border-amber-400/80 hover:border-amber-400 shadow-xl'
+          }`}
+          title="Toggle AI Tutor Chat"
+        >
+          {isChatOpen ? (
+            <X className="w-5 h-5 text-amber-400 transition-transform group-hover:rotate-90" />
+          ) : (
+            <div className="relative flex items-center justify-center">
+              <Bot className="w-6 h-6 text-amber-400" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#1C1C1C] animate-pulse" />
+            </div>
+          )}
+        </button>
+      </div>
     </div>
   );
 };

@@ -529,7 +529,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-serif font-bold text-base text-[#1C1C1C]">
-                  Learner Profile: {learnerProfile?.name || 'Mahesh Nyavanandhi'}
+                  Learner Profile: {learnerProfile?.name || 'Student'}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-mono font-bold border border-emerald-300 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-700" />
@@ -537,7 +537,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#666666] font-mono">
-                {learnerProfile?.email || 'maheshnyavanandhi533@gmail.com'}
+                {learnerProfile?.email || 'student@example.com'}
               </p>
             </div>
           </div>

@@ -44,12 +44,12 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 }) => {
   const [auth, setAuth] = useState<StudentAuthInfo>(
     profile.authInfo || {
-      isLoggedIn: true,
-      name: profile.name || 'Mahesh Nyavanandhi',
-      email: profile.email || 'maheshnyavanandhi533@gmail.com',
+      isLoggedIn: false,
+      name: profile.name || 'Student Learner',
+      email: profile.email || 'student@example.com',
       picture: profile.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-      authProvider: 'Google OAuth 2.0',
-      googleSub: 'google-oauth-student-10928374'
+      authProvider: 'Guest Session',
+      googleSub: ''
     }
   );
 
@@ -116,8 +116,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           setTimeout(() => {
             completeOAuthSuccess({
               isLoggedIn: true,
-              name: 'Mahesh Nyavanandhi',
-              email: 'maheshnyavanandhi533@gmail.com',
+              name: 'Student Learner',
+              email: 'student@example.com',
               picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
               authProvider: 'Google OAuth 2.0',
               googleSub: 'google-oauth-sub-889123'
@@ -132,8 +132,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             window.removeEventListener('message', handleOAuthMessage);
             completeOAuthSuccess({
               isLoggedIn: true,
-              name: event.data.user?.name || 'Mahesh Nyavanandhi',
-              email: event.data.user?.email || 'maheshnyavanandhi533@gmail.com',
+              name: event.data.user?.name || 'Student Learner',
+              email: event.data.user?.email || 'student@example.com',
               picture: event.data.user?.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
               authProvider: 'Google OAuth 2.0',
               googleSub: event.data.user?.sub || 'google-oauth-sub-889123'
@@ -150,8 +150,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             window.removeEventListener('message', handleOAuthMessage);
             completeOAuthSuccess({
               isLoggedIn: true,
-              name: 'Mahesh Nyavanandhi',
-              email: 'maheshnyavanandhi533@gmail.com',
+              name: 'Student Learner',
+              email: 'student@example.com',
               picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
               authProvider: 'Google OAuth 2.0',
               googleSub: 'google-oauth-sub-889123'
@@ -165,8 +165,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       console.warn('OAuth popup fallback activated', err);
       completeOAuthSuccess({
         isLoggedIn: true,
-        name: 'Mahesh Nyavanandhi',
-        email: 'maheshnyavanandhi533@gmail.com',
+        name: 'Student Learner',
+        email: 'student@example.com',
         picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
         authProvider: 'Google OAuth 2.0',
         googleSub: 'google-oauth-sub-889123'
@@ -440,11 +440,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {TEACHER_PERSONALITIES.map((p) => (
-                  <button
+                  <div
                     key={p.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setTeachingStyle(p.id)}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setTeachingStyle(p.id);
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       teachingStyle === p.id
                         ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#F9F8F6]'
                         : 'bg-[#F9F8F6] border-[#1C1C1C]/15 text-[#1C1C1C] hover:bg-[#F2EFEB]'
@@ -454,7 +460,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     <div className={`text-[10px] ${teachingStyle === p.id ? 'text-[#C0C0C0]' : 'text-[#666666]'}`}>
                       {p.subtitle}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>

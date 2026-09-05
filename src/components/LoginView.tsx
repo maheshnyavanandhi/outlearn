@@ -16,8 +16,8 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
-  const [name, setName] = useState('Mahesh Nyavanandhi');
-  const [email, setEmail] = useState('maheshnyavanandhi533@gmail.com');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [level, setLevel] = useState<EducationalLevel>('beginner');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -47,8 +47,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           // Fallback if popup blocked
           completeLogin({
             isLoggedIn: true,
-            name: name || 'Mahesh Nyavanandhi',
-            email: email || 'maheshnyavanandhi533@gmail.com',
+            name: name || 'Student Learner',
+            email: email || 'student@example.com',
             picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
             authProvider: 'Google OAuth 2.0',
             googleSub: 'google-sub-889123'
@@ -61,8 +61,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             window.removeEventListener('message', handleOAuthMessage);
             completeLogin({
               isLoggedIn: true,
-              name: event.data.user?.name || name || 'Mahesh Nyavanandhi',
-              email: event.data.user?.email || email || 'maheshnyavanandhi533@gmail.com',
+              name: event.data.user?.name || name || 'Student Learner',
+              email: event.data.user?.email || email || 'student@example.com',
               picture: event.data.user?.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
               authProvider: 'Google OAuth 2.0',
               googleSub: event.data.user?.sub || 'google-sub-889123'
@@ -78,8 +78,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             window.removeEventListener('message', handleOAuthMessage);
             completeLogin({
               isLoggedIn: true,
-              name: name || 'Mahesh Nyavanandhi',
-              email: email || 'maheshnyavanandhi533@gmail.com',
+              name: name || 'Student Learner',
+              email: email || 'student@example.com',
               picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
               authProvider: 'Google OAuth 2.0',
               googleSub: 'google-sub-889123'
@@ -92,8 +92,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     } catch (err) {
       completeLogin({
         isLoggedIn: true,
-        name: name || 'Mahesh Nyavanandhi',
-        email: email || 'maheshnyavanandhi533@gmail.com',
+        name: name || 'Student Learner',
+        email: email || 'student@example.com',
         picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
         authProvider: 'Google OAuth 2.0',
         googleSub: 'google-sub-889123'
@@ -264,15 +264,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               onClick={() =>
                 completeLogin({
                   isLoggedIn: true,
-                  name: 'Mahesh Nyavanandhi',
-                  email: 'maheshnyavanandhi533@gmail.com',
+                  name: 'Student Learner',
+                  email: 'student.demo@outlearn.ai',
                   picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
                   authProvider: 'Google OAuth 2.0'
                 })
               }
               className="px-2.5 py-1 rounded-lg bg-[#FAF9F5] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[11px] font-bold text-[#1C1C1C]"
             >
-              🎓 Mahesh N.
+              🎓 Student Demo
             </button>
             <button
               type="button"

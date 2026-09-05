@@ -21,6 +21,8 @@ export interface ConversationTurn {
   content: string;
   phase: LifecyclePhase;
   timestamp: string;
+  modelUsed?: string;
+  taskComplexity?: 'complex' | 'general' | 'fast';
 }
 
 export interface UseLessonOrchestratorProps {
@@ -93,7 +95,9 @@ export function useLessonOrchestrator({
   const addConversationTurn = useCallback((
     role: 'user' | 'assistant' | 'system',
     content: string,
-    phase: LifecyclePhase
+    phase: LifecyclePhase,
+    modelUsed?: string,
+    taskComplexity?: 'complex' | 'general' | 'fast'
   ) => {
     if (!content || !content.trim()) return;
     const turn: ConversationTurn = {
@@ -101,7 +105,9 @@ export function useLessonOrchestrator({
       role,
       content,
       phase,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      modelUsed,
+      taskComplexity
     };
     setConversationHistory((prev) => [...prev, turn]);
   }, []);
@@ -212,7 +218,6 @@ export function useLessonOrchestrator({
 
       const fallbackUSummary = `Analyzed Learner Profile: ${learnerProfile.name || 'Student'} (${learnerLevel} level, language: ${lang}, depth: ${learnerProfile.desiredDepth || 'conceptual'}). Prior knowledge: "${learnerProfile.statedPriorKnowledge || 'Basic concepts'}".`;
       setUnderstandSummary(fallbackUSummary);
-      addConversationTurn('system', fallbackUSummary, 'UNDERSTAND');
       logTeachingAction('INTRODUCE', topic, `[UNDERSTAND Phase] Intercepted learner profile & parameters for "${topic}".`);
 
       // Interface with Gemini API to refine the 8 determinations if missing or on plan change
@@ -238,7 +243,6 @@ export function useLessonOrchestrator({
             const dynamicDets = data.determinations;
             const updatedSummary = `[Gemini AI Analysis] Learner level calibrated to ${learnerLevel}. Scope: ${dynamicDets.whatNeedsToBeTaught || fallbackUSummary}`;
             setUnderstandSummary(updatedSummary);
-            addConversationTurn('assistant', updatedSummary, 'UNDERSTAND');
             
             // Attach live determinations to active plan
             setActiveLessonPlan((prev) => ({
@@ -270,7 +274,6 @@ export function useLessonOrchestrator({
       const dets = activeLessonPlan?.determinations;
       const pSummary = dets?.whatNeedsToBeTaught || `Mapped ${steps.length} concept steps with ${activeLessonPlan.totalMinutes || 20}min budget.`;
       setPlanSummary(pSummary);
-      addConversationTurn('assistant', pSummary, 'PLAN');
       logTeachingAction(
         'INTRODUCE',
         topic,
@@ -474,7 +477,11 @@ export function useLessonOrchestrator({
           category: data.category || 'conceptual_misconception',
           name: data.misconceptionName || 'Conceptual Misconception',
           diagnosis: data.diagnosedThought || 'Flawed intuitive assumption',
-          speech: data.correctiveSpeech || 'Let us re-examine this through a practical example.'
+          speech: data.correctiveSpeech || 'Let us re-examine this through a practical example.',
+          strategy: data.suggestedStrategy || 'analogy',
+          correctiveStrategyText: data.correctiveStrategyText || `Apply ${data.suggestedStrategy || 'analogy'} strategy to re-anchor core physical concepts.`,
+          studentAnswer: rawAnswer,
+          conceptName: currentStep?.concept?.name || activeLessonPlan.topic
         };
         setActiveMisconception(miscObj);
         addConversationTurn('assistant', miscObj.speech, 'ADAPT');
@@ -521,35 +528,37 @@ export function useLessonOrchestrator({
     advanceToNextBeat();
   };
 
-  // Intercept Mid-Lesson Student Question (RAG Grounded AI via Gemini)
+  // Intercept Mid-Lesson Student Question (RAG Grounded Multi-Turn AI Tutor via Gemini)
   const handleAskTeacher = async (customQuery?: string) => {
     const queryToUse = customQuery !== undefined ? customQuery : studentQuery;
     if (!queryToUse.trim()) return;
 
     setIsQueryLoading(true);
     addConversationTurn('user', queryToUse, lifecyclePhase);
+    setStudentQuery('');
     speechService.stop();
 
     try {
-      const res = await fetch('/api/ask-teacher', {
+      const res = await fetch('/api/tutor-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentQuestion: queryToUse,
+          message: queryToUse,
+          messages: conversationHistory,
           currentConcept: currentStep?.concept?.name || activeLessonPlan.topic,
           currentTopic: activeLessonPlan.topic,
           language: activeLanguage,
           teacherPersonality,
-          materialContext: activeLessonPlan.sourceDocumentName ? `Uploaded document: ${activeLessonPlan.sourceDocumentName}` : ''
+          educationalLevel: learnerProfile.educationalLevel || 'beginner'
         })
       });
 
       const data = await res.json();
       setTeacherAnswer(data.answer);
       setTeacherAnswerMeta({ isLiveAi: data.isLiveAi, modelUsed: data.modelUsed });
-      addConversationTurn('assistant', data.answer, lifecyclePhase);
+      addConversationTurn('assistant', data.answer, lifecyclePhase, data.modelUsed, data.taskComplexity);
 
-      logTeachingAction('EXPLAIN', currentStep?.concept?.name || activeLessonPlan.topic, `Answered student query: "${queryToUse.slice(0, 40)}..."`);
+      logTeachingAction('EXPLAIN', currentStep?.concept?.name || activeLessonPlan.topic, `AI Tutor (${data.modelUsed || 'Gemini'}) answered query: "${queryToUse.slice(0, 40)}..."`);
 
       // Speak teacher answer
       speechService.speak(data.answer, activeLanguage, { rate: speechRate });
@@ -557,7 +566,7 @@ export function useLessonOrchestrator({
       console.warn('[LessonOrchestrator] Error asking teacher:', err);
       const fallbackAns = `In ${currentStep?.concept?.name || activeLessonPlan.topic}, this principle links directly to our core model. Let us continue exploring to see how it works in practice.`;
       setTeacherAnswer(fallbackAns);
-      addConversationTurn('assistant', fallbackAns, lifecyclePhase);
+      addConversationTurn('assistant', fallbackAns, lifecyclePhase, 'gemini-3.5-flash');
     } finally {
       setIsQueryLoading(false);
     }
