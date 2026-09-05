@@ -268,7 +268,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   const BadgeIcon = currentBadge.icon;
 
   return (
-    <div className="relative flex flex-col items-center select-none" id="teacher-avatar-container">
+    <div className="relative flex flex-col items-center select-none w-full max-w-full overflow-hidden" id="teacher-avatar-container">
       {/* Mode Switcher Pill */}
       <div className="flex items-center gap-1 mb-2 p-0.5 rounded-lg bg-[#F2EFEB] border border-[#1C1C1C]/15">
         <button

@@ -114,8 +114,24 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
   // General animation & node selection
   const [isAnimating, setIsAnimating] = useState(true);
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<string | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const simulationRef = useRef<d3.Simulation<any, undefined> | null>(null);
+
+  // ResizeObserver for maintaining precise aspect-ratio proportions
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      if (entries[0]) {
+        const { width, height } = entries[0].contentRect;
+        if (width > 0 && height > 0) {
+          setContainerSize({ width: Math.round(width), height: Math.round(height) });
+        }
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Main D3 Rendering Engine
   useEffect(() => {
@@ -126,8 +142,8 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
       simulationRef.current = null;
     }
 
-    const width = containerRef.current.clientWidth || 600;
-    const height = containerRef.current.clientHeight || 340;
+    const width = containerRef.current.clientWidth || containerSize.width || 600;
+    const height = containerRef.current.clientHeight || containerSize.height || 340;
 
     // Clear previous SVG contents cleanly
     const svg = d3.select(svgRef.current);
@@ -187,7 +203,9 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
     joinType,
     topic,
     conceptName,
-    isAnimating
+    isAnimating,
+    containerSize.width,
+    containerSize.height
   ]);
 
   // ==========================================
@@ -1180,7 +1198,7 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
         </div>
 
         {/* Sub-view switcher tabs ONLY relevant to current active subject */}
-        <div className="flex items-center gap-1 bg-[#F4F1EA] p-1 rounded-xl border border-[#1C1C1C]/10 text-xs font-mono">
+        <div className="flex items-center gap-1 bg-[#F4F1EA] p-1 rounded-xl border border-[#1C1C1C]/10 text-xs font-mono max-w-full overflow-x-auto shrink-0 whitespace-nowrap">
           {activeSubject === 'physics' && (
             <>
               <button
@@ -1335,8 +1353,8 @@ export const D3InteractiveDiagram: React.FC<D3InteractiveDiagramProps> = ({
         </div>
       </div>
 
-      {/* Main Canvas View */}
-      <div ref={containerRef} className="flex-1 w-full min-h-[260px] relative my-2 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/10 flex items-center justify-center overflow-hidden">
+      {/* Main Canvas View with Aspect Ratio Proportions */}
+      <div ref={containerRef} className="flex-1 w-full aspect-[4/3] sm:aspect-[16/10] min-h-[240px] max-h-[420px] relative my-2 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/10 flex items-center justify-center overflow-hidden">
         <svg ref={svgRef} className="w-full h-full block" />
 
         {selectedNodeInfo && (

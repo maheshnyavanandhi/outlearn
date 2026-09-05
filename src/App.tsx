@@ -317,18 +317,18 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1C1C1C] flex flex-col selection:bg-[#1C1C1C] selection:text-[#F9F8F6]" id="outlearn-app-root">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden min-w-0 bg-[#F9F8F6] text-[#1C1C1C] flex flex-col selection:bg-[#1C1C1C] selection:text-[#F9F8F6]" id="outlearn-app-root">
       {/* Top Application Navigation Bar - Editorial Masthead Style */}
-      <header className="px-4 py-3.5 bg-[#F9F8F6]/95 backdrop-blur-md border-b border-[#1C1C1C]/15 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className="px-3 sm:px-4 py-2.5 sm:py-3.5 bg-[#F9F8F6]/95 backdrop-blur-md border-b border-[#1C1C1C]/15 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           {/* Brand & Logo */}
           <div
             onClick={() => setCurrentView('setup')}
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group shrink-0"
           >
             {/* Signature Minimalist OutLearn Arc Mark in Editorial Carbon */}
-            <div className="relative w-8 h-8 rounded-lg bg-[#1C1C1C] border border-[#1C1C1C] flex items-center justify-center overflow-hidden shadow-sm group-hover:bg-[#2C2C2C] transition-colors">
-              <svg viewBox="0 0 32 32" className="w-5 h-5">
+            <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#1C1C1C] border border-[#1C1C1C] flex items-center justify-center overflow-hidden shadow-sm group-hover:bg-[#2C2C2C] transition-colors shrink-0">
+              <svg viewBox="0 0 32 32" className="w-4 h-4 sm:w-5 sm:h-5">
                 <defs>
                   <linearGradient id="outlearnArcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#D97706" />
@@ -348,15 +348,15 @@ export default function App() {
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-serif font-black text-xl tracking-tight text-[#1C1C1C]">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-serif font-black text-lg sm:text-xl tracking-tight text-[#1C1C1C]">
                   OutLearn
                 </span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#1C1C1C] text-[#F9F8F6] font-mono font-semibold tracking-widest uppercase">
+                <span className="text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full bg-[#1C1C1C] text-[#F9F8F6] font-mono font-semibold tracking-widest uppercase shrink-0">
                   AI TEACHER
                 </span>
               </div>
-              <p className="text-[10px] text-[#666666] font-serif italic hidden sm:block">
+              <p className="text-[10px] text-[#666666] font-serif italic hidden md:block">
                 Adaptive AI Educator & Masterclass Studio
               </p>
             </div>
@@ -550,18 +550,64 @@ export default function App() {
             {/* Sign Out Button */}
             <button
               onClick={() => setIsAuthenticated(false)}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#1C1C1C]/15 hover:bg-[#EAE6DF] text-[#666666] hover:text-[#1C1C1C] text-xs flex items-center gap-1 transition-all"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#1C1C1C]/15 hover:bg-[#EAE6DF] text-[#666666] hover:text-[#1C1C1C] text-xs flex items-center gap-1 transition-all shrink-0"
               title="Sign Out to Login Screen"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline font-mono text-[11px]">Sign Out</span>
+              <span className="hidden xl:inline font-mono text-[11px]">Sign Out</span>
             </button>
           </div>
+        </div>
+
+        {/* Mobile Nav View Switcher Pills */}
+        <div className="flex md:hidden items-center justify-around bg-[#ECEAE4] p-1 rounded-xl border border-[#1C1C1C]/10 text-xs font-sans mt-2">
+          <button
+            onClick={() => setCurrentView('setup')}
+            className={`flex-1 py-1.5 text-center rounded-lg font-medium transition-all text-[11px] ${
+              currentView === 'setup'
+                ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-xs'
+                : 'text-[#5A5A5A]'
+            }`}
+          >
+            Setup
+          </button>
+          <button
+            onClick={() => setCurrentView('teaching')}
+            className={`flex-1 py-1.5 text-center rounded-lg font-medium transition-all text-[11px] ${
+              currentView === 'teaching'
+                ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-xs'
+                : 'text-[#5A5A5A]'
+            }`}
+          >
+            Teaching
+          </button>
+          <button
+            onClick={() => setCurrentView('path')}
+            className={`flex-1 py-1.5 text-center rounded-lg font-medium transition-all text-[11px] ${
+              currentView === 'path'
+                ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-xs'
+                : 'text-[#5A5A5A]'
+            }`}
+          >
+            Roadmap
+          </button>
+          {learningReport && (
+            <button
+              onClick={() => setCurrentView('report')}
+              className={`flex-1 py-1.5 text-center rounded-lg font-medium transition-all text-[11px] ${
+                currentView === 'report'
+                  ? 'bg-[#1C1C1C] text-[#F9F8F6] font-bold shadow-xs'
+                  : 'text-[#5A5A5A]'
+              }`}
+            >
+              Report
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main View Router */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col w-full max-w-full overflow-x-hidden min-w-0">
         {currentView === 'setup' && (
           <SetupView
             learnerProfile={learnerProfile}

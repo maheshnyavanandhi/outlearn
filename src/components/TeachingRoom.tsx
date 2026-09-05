@@ -138,23 +138,27 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
   ];
 
   return (
-    <div className="w-full min-h-[90vh] flex flex-col bg-[#F9F8F6] text-[#1C1C1C]" id="teaching-room-root">
+    <div className="w-full max-w-full min-h-[90vh] flex flex-col bg-[#F9F8F6] text-[#1C1C1C] overflow-x-hidden" id="teaching-room-root">
       {/* Top Persistent Lesson Context & Lifecycle Indicator Strip */}
-      <div className="px-4 py-2.5 bg-[#FFFFFF] border-b border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-3">
+      <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-[#FFFFFF] border-b border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-2 sm:gap-3 sticky top-0 z-30 shadow-sm w-full max-w-full overflow-hidden">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <span className="w-2.5 h-2.5 rounded-full bg-[#1C1C1C] animate-pulse" />
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-base font-serif font-bold text-[#1C1C1C]">{effectivePlan.topic}</h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h2 className="text-xs sm:text-base font-serif font-bold text-[#1C1C1C]">{effectivePlan.topic}</h2>
+              <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-[#F2EFEB] text-[#1C1C1C] font-mono border border-[#1C1C1C]/15 font-semibold">
                 Step {currentStepIdx + 1}/{steps.length || 1}
+              </span>
+              {/* Compact Mobile Phase Badge */}
+              <span className="md:hidden text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-[#1C1C1C] text-[#F9F8F6] uppercase">
+                {lifecyclePhase}
               </span>
               <span className="hidden lg:inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono border border-emerald-300/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                 <span>AI Orchestrator {isOrchestratingLifecycle ? 'Evaluating...' : 'Active'}</span>
               </span>
             </div>
-            <p className="text-xs text-[#666666] truncate max-w-md">
+            <p className="text-[11px] sm:text-xs text-[#666666] truncate max-w-[200px] sm:max-w-md">
               Teaching: <strong className="text-[#1C1C1C] font-serif">{currentStep?.concept?.name || effectivePlan.topic}</strong>
             </p>
           </div>
@@ -194,11 +198,11 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
         </div>
 
         {/* Action Controls & Finish Assessment Button */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* AI Pedagogical Blueprint Modal Trigger */}
           <button
             onClick={() => setIsDeterminationsModalOpen(true)}
-            className="hidden sm:flex px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold items-center gap-1.5 transition-all"
+            className="hidden sm:flex px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold items-center gap-1.5 transition-all"
             title="View 8 Pedagogical Determinations Blueprint"
           >
             <Brain className="w-3.5 h-3.5 text-[#1C1C1C]" />
@@ -208,7 +212,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           {/* Teacher Brain / Decision Logs Drawer Trigger */}
           <button
             onClick={() => setIsLogDrawerOpen(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold flex items-center gap-1.5 transition-all"
+            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-[#F2EFEB] hover:bg-[#E6E3DB] border border-[#1C1C1C]/15 text-[#1C1C1C] text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition-all"
             title="View Teacher Decision Engine Logs & Conversation Transcript"
           >
             <ListOrdered className="w-3.5 h-3.5 text-[#1C1C1C]" />
@@ -220,7 +224,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             <select
               value={activeLanguage || 'en'}
               onChange={(e) => setActiveLanguage(e.target.value as LanguageCode)}
-              className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer"
+              className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-xl px-2 sm:px-2.5 py-1 sm:py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] cursor-pointer"
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
                 <option key={lang.code} value={lang.code}>
@@ -233,20 +237,22 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           {/* Finish & Take Final Quiz Button */}
           <button
             onClick={() => onFinishLesson(effectivePlan, learnerProfile)}
-            className="px-3.5 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+            className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#2C2C2C] text-[#F9F8F6] text-xs font-bold shadow-sm flex items-center gap-1 sm:gap-1.5 transition-all shrink-0"
           >
-            <GraduationCap className="w-4 h-4" />
-            <span>Complete & Assess</span>
+            <GraduationCap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden xs:inline">Complete & Assess</span>
+            <span className="xs:hidden">Assess</span>
           </button>
         </div>
       </div>
 
-      {/* Main Split-Stage Arena: Clean 2-Column Grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6 max-w-7xl mx-auto w-full">
-        {/* LEFT COLUMN: AI Avatar Studio & D3 Interactive Visual Canvas */}
-        <div className="lg:col-span-6 flex flex-col gap-4">
+      {/* Main Split-Stage Arena: CSS Container Query Responsive Switch */}
+      <div className="teaching-room-container flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 overflow-hidden min-w-0">
+        <div className="teaching-room-grid w-full max-w-full overflow-hidden min-w-0">
+          {/* LEFT COLUMN (Top on mobile < 768px container): AI Avatar Studio & D3 Interactive Visual Canvas */}
+          <div className="teaching-room-left flex flex-col gap-4 w-full max-w-full overflow-hidden min-w-0">
           {/* AI Teacher Avatar Card */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col items-center justify-center relative">
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col items-center justify-center relative w-full max-w-full overflow-hidden">
             <TeacherAvatar
               personality={teacherPersonality}
               isSpeaking={isSpeaking}
@@ -283,12 +289,12 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
 
             {/* Subtitles & Timed Caption Track beneath Avatar */}
             {showCaptions && (
-              <div className="w-full mt-3 p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15 text-center text-xs text-[#1C1C1C] min-h-[44px] flex items-center justify-center font-serif italic shadow-2xs gap-2">
+              <div className="w-full mt-3 p-3 rounded-xl bg-[#FAF9F5] border border-[#1C1C1C]/15 text-xs text-[#1C1C1C] min-h-[48px] flex flex-wrap sm:flex-nowrap items-center justify-center font-serif italic shadow-2xs gap-2">
                 <span className="text-amber-800 bg-amber-100/80 border border-amber-300/60 px-2 py-0.5 rounded font-mono text-[10px] not-italic shrink-0 font-bold flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-600" />
                   <span>Subtitles</span>
                 </span>
-                <span className="truncate">{activeSpeechText || currentBeat?.speechEn || 'Listening and preparing lesson concepts...'}</span>
+                <span className="line-clamp-2 text-[11px] sm:text-xs text-[#1C1C1C] font-serif leading-snug break-words text-center sm:text-left">{activeSpeechText || currentBeat?.speechEn || 'Listening and preparing lesson concepts...'}</span>
               </div>
             )}
 
@@ -300,7 +306,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               <select
                 value={teacherPersonality || 'mentor'}
                 onChange={(e) => setTeacherPersonality(e.target.value as TeacherPersonality)}
-                className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-serif"
+                className="bg-[#F9F8F6] border border-[#1C1C1C]/20 text-[#1C1C1C] text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1C1C1C] font-serif max-w-[180px] sm:max-w-none truncate"
               >
                 {TEACHER_PERSONALITIES.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -312,7 +318,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           </div>
 
           {/* D3 Interactive Diagram & Concept Blueprint Visual Canvas */}
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col gap-3">
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 p-4 shadow-sm flex flex-col gap-3 w-full max-w-full overflow-hidden">
             {/* Visual Header & Concept Summary */}
             <div className="flex items-start justify-between gap-2 border-b border-[#1C1C1C]/10 pb-2.5">
               <div>
@@ -334,8 +340,8 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
               )}
             </div>
 
-            {/* D3 Diagram Stage */}
-            <div className="min-h-[320px] bg-[#FFFFFF] rounded-xl border border-[#1C1C1C]/10 overflow-hidden flex flex-col relative">
+            {/* D3 Diagram Stage with Aspect Ratio Proportions */}
+            <div className="bg-[#FFFFFF] rounded-xl border border-[#1C1C1C]/10 overflow-hidden flex flex-col relative w-full max-w-full aspect-[4/3] sm:aspect-[16/10] min-h-[280px]">
               {/* Dynamic AI Orchestrator Lifecycle Banner overlay during UNDERSTAND or PLAN phases */}
               {(lifecyclePhase === 'UNDERSTAND' || lifecyclePhase === 'PLAN' || isOrchestratingLifecycle) && (
                 <div className="absolute top-2 left-2 right-2 z-20 p-2.5 rounded-xl bg-[#FFFFFF]/95 backdrop-blur-md border border-[#1C1C1C]/20 shadow-md">
@@ -361,7 +367,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
 
             {/* Video Player Timeline & Controls Bar */}
-            <div className="p-2.5 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-2">
+            <div className="p-2.5 bg-[#FAF9F5] rounded-xl border border-[#1C1C1C]/15 flex flex-wrap items-center justify-between gap-2 w-full max-w-full overflow-hidden">
               {/* Play/Pause & Replay Buttons */}
               <div className="flex items-center gap-1.5">
                 <button
@@ -439,25 +445,25 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Interactive Teaching Chat Thread */}
-        <div className="lg:col-span-6 flex flex-col h-full">
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 shadow-sm p-4 flex flex-col h-full min-h-[620px]">
+          {/* RIGHT COLUMN (Bottom on mobile < 768px container): Interactive Teaching Chat Thread */}
+          <div className="teaching-room-right flex flex-col h-full w-full max-w-full overflow-hidden min-w-0">
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#1C1C1C]/15 shadow-sm p-3.5 sm:p-4 flex flex-col h-full min-h-[420px] lg:min-h-[600px] w-full max-w-full overflow-hidden">
             {/* Thread Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1C1C1C]/15 mb-3 gap-2">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div>
-                  <h3 className="text-sm font-serif font-bold text-[#1C1C1C]">
+                  <h3 className="text-xs sm:text-sm font-serif font-bold text-[#1C1C1C]">
                     Interactive Teaching Thread
                   </h3>
-                  <p className="text-[10px] text-[#777777] font-mono">
+                  <p className="text-[10px] text-[#777777] font-mono hidden sm:block">
                     Real-time dialogue & checkpoint stream
                   </p>
                 </div>
               </div>
 
               {/* Concept Progression Pills */}
-              <div className="flex items-center gap-1 max-w-[200px] overflow-x-auto pb-0.5">
+              <div className="flex items-center gap-1 max-w-[130px] sm:max-w-[200px] overflow-x-auto pb-0.5">
                 {steps.map((step, idx) => (
                   <button
                     key={step.id || idx}
@@ -476,7 +482,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
             </div>
 
             {/* Conversation Stream Scroll Area */}
-            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[580px] min-h-[380px]">
+            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[420px] sm:max-h-[500px] lg:max-h-[580px] min-h-[250px] sm:min-h-[350px]">
               {conversationHistory.length === 0 ? (
                 <div className="p-6 text-center text-[#888888] font-serif italic text-xs">
                   Initiating lesson sequence with {TEACHER_PERSONALITIES.find(p => p.id === teacherPersonality)?.title || 'Teacher'}...
@@ -677,6 +683,7 @@ export const TeachingRoom: React.FC<TeachingRoomProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
       {/* Checkpoint Interactive Dialog (When QUESTION phase or pauseForInteraction is active, and no active misconception) */}
       {(lifecyclePhase === 'QUESTION' || (isAwaitingResponse && currentBeat?.checkpoint)) && !activeMisconception && currentBeat?.checkpoint && (

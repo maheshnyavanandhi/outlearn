@@ -32,3 +32,58 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(28, 28, 28, 0.45);
 }
+
+/* Container query responsive switch for TeachingRoom component */
+.teaching-room-container {
+  container-type: inline-size;
+  container-name: teaching-room;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.teaching-room-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.teaching-room-left,
+.teaching-room-right {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@container teaching-room (min-width: 768px) {
+  .teaching-room-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .teaching-room-grid > .teaching-room-left {
+    grid-column: span 6 / span 6;
+  }
+  .teaching-room-grid > .teaching-room-right {
+    grid-column: span 6 / span 6;
+  }
+}
+
+@media (min-width: 768px) {
+  .teaching-room-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .teaching-room-grid > .teaching-room-left {
+    grid-column: span 6 / span 6;
+  }
+  .teaching-room-grid > .teaching-room-right {
+    grid-column: span 6 / span 6;
+  }
+}
